@@ -1,0 +1,79 @@
+@charset "utf-8";
+/* Staff order screen (staff.js). Shared by every restaurant; a page can override the variables below. */
+:root {
+  --st-bg: #F3EBD6; --st-card: #FFFBEE; --st-ink: #3A2418; --st-muted: #7A6552; --st-line: #E2D2AA;
+  --st-accent: #5B3A78; --st-accent-ink: #FCF4DC; --st-new: #C0392B; --st-go: #2F7D4A;
+  --st-font: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --st-font-strong: "Antonio", "Arial Narrow", system-ui, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--st-bg); color: var(--st-ink); font: 16px/1.4 var(--st-font); -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; }
+:focus-visible { outline: 3px solid var(--st-accent); outline-offset: 2px; }
+
+.top {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px; background: var(--st-accent); color: var(--st-accent-ink);
+}
+.top h1 { margin: 0 auto 0 0; font: 600 22px/1.1 var(--st-font-strong); letter-spacing: .08em; text-transform: uppercase; }
+.top h1 span { opacity: .7; font-weight: 400; }
+.top .who { font-size: 13px; opacity: .8; }
+.top button { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid currentColor; background: none; color: inherit; cursor: pointer; font-size: 14px; font-weight: 600; }
+.top button[aria-pressed="false"] { opacity: .6; }
+body.has-new .top { background: var(--st-new); }
+
+.banner { margin: 0; padding: 10px 16px; font-weight: 600; text-align: center; }
+.banner.warn { background: #FBE6E1; color: #8A1C0C; }
+.banner.info { background: #FFF3C4; color: #5C4300; cursor: pointer; }
+
+/* Sign in */
+.login { max-width: 380px; margin: 10vh auto; padding: 28px 24px; background: var(--st-card); border: 1.5px solid var(--st-line); border-radius: 18px; }
+.login h2 { margin: 0 0 4px; font: 600 26px var(--st-font-strong); letter-spacing: .06em; text-transform: uppercase; }
+.login p { margin: 0 0 18px; color: var(--st-muted); font-size: 14.5px; }
+.login label { display: block; margin: 12px 0 5px; font-weight: 600; font-size: 14px; }
+.login input { width: 100%; min-height: 48px; padding: 10px 12px; border: 1.5px solid var(--st-line); border-radius: 10px; background: #fff; font-size: 16px; }
+.login input:focus { outline: none; border-color: var(--st-accent); }
+.login button { width: 100%; min-height: 52px; margin-top: 20px; border: 0; border-radius: 12px; background: var(--st-accent); color: var(--st-accent-ink); font-weight: 700; font-size: 17px; cursor: pointer; }
+.login button:disabled { opacity: .6; }
+.login .err { min-height: 1.4em; margin: 12px 0 0; color: #8A1C0C; font-size: 14px; }
+
+/* Board: three columns on a tablet, stacked on a phone */
+.board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 16px; align-items: start; }
+@media (max-width: 900px) { .board { grid-template-columns: 1fr; } }
+.col h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font: 600 18px var(--st-font-strong); letter-spacing: .1em; text-transform: uppercase; }
+.col h2 .n { min-width: 28px; height: 28px; padding: 0 8px; border-radius: 999px; display: inline-grid; place-items: center; background: var(--st-ink); color: #fff; font-size: 15px; letter-spacing: 0; }
+.col-new h2 .n { background: var(--st-new); }
+.list { display: grid; gap: 12px; }
+.none { margin: 0; padding: 20px; text-align: center; color: var(--st-muted); border: 1.5px dashed var(--st-line); border-radius: 14px; }
+
+.order { background: var(--st-card); border: 1.5px solid var(--st-line); border-left: 8px solid var(--st-line); border-radius: 14px; padding: 12px 14px 14px; }
+.order[data-status="new"] { border-left-color: var(--st-new); }
+.order[data-status="accepted"] { border-left-color: var(--st-accent); }
+.order[data-status="preparing"] { border-left-color: #D9A23C; }
+.order[data-status="served"] { border-left-color: var(--st-go); opacity: .75; }
+.order[data-status="cancelled"] { opacity: .55; }
+.order[data-status="cancelled"] .items { text-decoration: line-through; }
+.order.arrived { animation: arrive 1s ease-out 3; }
+@keyframes arrive { 50% { box-shadow: 0 0 0 6px rgba(192, 57, 43, .35); } }
+@media (prefers-reduced-motion: reduce) { .order.arrived { animation: none; } }
+.order header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.order .table { font: 600 30px/1 var(--st-font-strong); letter-spacing: .04em; text-transform: uppercase; }
+.order .meta { display: flex; gap: 10px; align-items: baseline; font-size: 13.5px; color: var(--st-muted); }
+.order .code { font-weight: 700; letter-spacing: .06em; }
+.order .late { color: var(--st-new); font-weight: 700; }
+.items { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; font-size: 17px; }
+.items b { display: inline-block; min-width: 2.2em; }
+.items em { color: var(--st-muted); }
+.notes { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: #FFF3C4; font-size: 15px; }
+.order footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--st-line); font-size: 14px; }
+.order .total { font-weight: 700; font-variant-numeric: tabular-nums; }
+.order .state { font: 600 14px var(--st-font-strong); letter-spacing: .1em; text-transform: uppercase; color: var(--st-muted); }
+.actions { display: flex; gap: 10px; margin-top: 12px; }
+.actions button { min-height: 52px; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 16px; }
+.actions .go { flex: 1; border: 0; background: var(--st-go); color: #fff; }
+.order[data-status="new"] .actions .go { background: var(--st-new); }
+.actions .cancel { padding: 0 14px; border: 1.5px solid var(--st-line); background: none; color: var(--st-muted); }
+.actions .cancel.confirm { border-color: var(--st-new); background: var(--st-new); color: #fff; }
+.actions button:disabled { opacity: .6; cursor: default; }

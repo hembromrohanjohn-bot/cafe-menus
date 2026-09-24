@@ -13,6 +13,10 @@
  * Each table gets its own saved cart. With no table in the link guests can still browse and build an
  * order; they're asked for their table number when they place it.
  *
+ * Where orders go: with MENU_CONFIG.firebase set, they're saved to Firestore (orders-firebase.js) and the guest
+ * sees live status as staff update it on the staff screen. Otherwise with orderWebhookUrl they're POSTed there,
+ * and with neither they're only logged.
+ *
  * Menus that re-render their items (tabs, search, filters) are fine: a MutationObserver re-adds the
  * controls every time the item list changes. With orderingEnabled anything but true, this file does nothing.
  */
@@ -20,6 +24,7 @@
   "use strict";
   const C = window.MENU_CONFIG;
   if (!C || C.orderingEnabled !== true) return;
+  const CART_SRC = document.currentScript ? document.currentScript.src : location.href;
 
   const STORE_PREFIX = "cart:" + (C.restaurantId || location.pathname);
   const MAX_QTY = 20;
@@ -47,6 +52,61 @@
     if (raw != null && !table) console.warn("[cart] Ignoring table in the link, not a table number:", raw);
   } catch (_) {}
   const storeKey = () => STORE_PREFIX + (table ? ":" + table : "");
+
+  /* ---------- Orders this phone has placed (for live status) ---------- */
+
+  const STATUS = {
+    new:       { label: "Sent",           note: "Waiting for the restaurant to accept your order." },
+    accepted:  { label: "Accepted",       note: "The restaurant has your order." },
+    preparing: { label: "Being prepared", note: "The kitchen is preparing your order." },
+    served:    { label: "Served",         note: "Enjoy your meal!" },
+    cancelled: { label: "Cancelled",      note: "This order was cancelled. Please ask your server." }
+  };
+  const STEPS = ["new", "accepted", "preparing", "served"];
+  const FINAL = ["served", "cancelled"];
+  const KEEP_MS = 8 * 3600e3;          // forget orders after 8 hours
+  const SHOW_FINAL_MS = 15 * 60e3;     // keep showing a served or cancelled order for 15 minutes
+
+  const trackKey = () => "orders:" + (C.restaurantId || location.pathname) + (table ? ":" + table : "");
+  let tracked = [];                    // { id, code, table, at, status, statusAt }, newest first
+  const watching = new Map();          // order id -> function that stops watching
+
+  function loadTracked() {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem(trackKey()) || "[]"); } catch (_) {}
+    tracked = (Array.isArray(list) ? list : []).filter(o => o && typeof o.id === "string" && Date.now() - o.at < KEEP_MS);
+  }
+  function saveTracked() {
+    try { localStorage.setItem(trackKey(), JSON.stringify(tracked)); } catch (_) {}
+  }
+  // Orders worth showing the guest: still in progress, or finished in the last few minutes
+  const activeOrders = () => tracked.filter(o => !FINAL.includes(o.status) || Date.now() - (o.statusAt || o.at) < SHOW_FINAL_MS);
+
+  let fbModule = null;
+  function firebase() {
+    fbModule = fbModule || import(new URL("orders-firebase.js", CART_SRC).href).catch(err => { fbModule = null; throw err; });
+    return fbModule;
+  }
+
+  function watchTracked() {
+    if (!C.firebase) return;
+    tracked.forEach(o => {
+      if (watching.has(o.id)) return;
+      watching.set(o.id, () => {});
+      firebase().then(fb => {
+        const stop = fb.watchOrder(C, o.id, ({ status, statusAt }) => {
+          const entry = tracked.find(t => t.id === o.id);
+          if (!entry || !STATUS[status] || entry.status === status) return;
+          entry.status = status;
+          entry.statusAt = statusAt || Date.now();
+          saveTracked();
+          live.textContent = `Order ${entry.code}: ${STATUS[status].label}. ${STATUS[status].note}`;
+          refresh();
+        });
+        watching.set(o.id, stop);
+      }).catch(err => { watching.delete(o.id); console.warn("[cart] Couldn't load order status:", err); });
+    });
+  }
 
   /* ---------- Cart state ---------- */
 
@@ -109,6 +169,8 @@
       history.replaceState(history.state, "", url);
     } catch (_) {}
     paintTable();
+    loadTracked();   // this table's earlier orders, if any
+    watchTracked();
   }
 
   function paintTable() {
@@ -120,6 +182,7 @@
 
   // item is needed only when the line is new: { id, name, variant, price }
   function setQty(key, qty, item) {
+    pendingId = null;   // the cart changed, so a retry is a new order
     qty = Math.max(0, Math.min(MAX_QTY, qty));
     const i = lines.findIndex(l => l.key === key);
     if (i === -1) {
@@ -156,13 +219,23 @@
     };
   }
 
-  // The only place an order leaves the page. With no orderWebhookUrl it just logs the order.
-  // Resolves when the order is accepted; throws on any failure so the cart is kept.
+  // The only place an order leaves the page: Firebase if configured, else the webhook, else just logged.
+  // Resolves with { id } (the Firebase order id, or null) once the order is accepted;
+  // throws on any failure so the cart is kept.
+  let pendingId = null;   // reused if the guest retries the same cart, so a slow first attempt can't double the order
   async function submitOrder(order) {
+    if (C.firebase) {
+      const fb = await firebase();
+      pendingId = pendingId || fb.newOrderId(C);
+      await fb.saveOrder(C, pendingId, order);
+      const id = pendingId;
+      pendingId = null;
+      return { id };
+    }
     if (!C.orderWebhookUrl) {
       console.log("[cart] No orderWebhookUrl set, so the order was only logged:", order);
       await new Promise(r => setTimeout(r, 400));
-      return;
+      return { id: null };
     }
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 15000);
@@ -177,6 +250,7 @@
     } finally {
       clearTimeout(timer);
     }
+    return { id: null };
   }
 
   /* ---------- Controls on menu items ---------- */
@@ -239,7 +313,8 @@
   /* ---------- Floating bar and order sheet ---------- */
 
   let bar, barBtn, sheet, panel, titleEl, bodyEl, footEl, linesEl, sumEl, notesEl, live;
-  let view = "review";   // "review" | "choose" | "sent"
+  let view = "review";   // "review" | "choose" | "sent" | "status"
+  let sentId = null;
   let chooseItem = null, sending = false, error = "", opener = null;
   let askTable = false, tableError = "";
   let whereEl, askEl, askInput, askErrEl;
@@ -272,11 +347,31 @@
   }
 
   function paintBar() {
-    const t = totals();
-    doc.classList.toggle("cart-has-bar", t.count > 0);
-    bar.hidden = t.count === 0 || !sheet.hidden;
-    paint(barBtn, `<span class="cart-bar-count">${t.count} ${t.count === 1 ? "item" : "items"}</span><span class="cart-bar-dot" aria-hidden="true">·</span>`
-      + `<span class="cart-bar-total">${money(t.subtotal)}</span><span class="cart-bar-cta">View order</span>`);
+    const t = totals(), active = activeOrders();
+    const show = t.count > 0 || active.length > 0;
+    doc.classList.toggle("cart-has-bar", show);
+    bar.hidden = !show || !sheet.hidden;
+    if (t.count > 0 || !active.length) {
+      barBtn.dataset.cartAct = "open";
+      paint(barBtn, `<span class="cart-bar-count">${t.count} ${t.count === 1 ? "item" : "items"}</span><span class="cart-bar-dot" aria-hidden="true">·</span>`
+        + `<span class="cart-bar-total">${money(t.subtotal)}</span><span class="cart-bar-cta">View order</span>`);
+    } else {
+      // Nothing in the cart but an order in progress: the bar tracks it
+      const o = active[0];
+      barBtn.dataset.cartAct = "status";
+      paint(barBtn, `<span class="cart-bar-count">Order #${esc(o.code)}</span><span class="cart-bar-dot" aria-hidden="true">·</span>`
+        + `<span class="cart-bar-status" data-status="${esc(o.status)}">${esc(STATUS[o.status].label)}</span><span class="cart-bar-cta">Track</span>`);
+    }
+  }
+
+  function trackerHTML(o) {
+    const step = STEPS.indexOf(o.status);
+    let html = `<div class="cart-track" data-status="${esc(o.status)}"><div class="cart-track-head"><span class="cart-code">Order #${esc(o.code)}</span>`
+      + (o.table ? `<span class="cart-table-pill">Table ${esc(o.table)}</span>` : "") + "</div>";
+    if (o.status === "cancelled") html += '<p class="cart-track-cancel">Cancelled</p>';
+    else html += '<ol class="cart-steps">' + STEPS.map((s, i) =>
+      `<li class="${i < step ? "done" : i === step ? "now" : ""}"${i === step ? ' aria-current="step"' : ""}><span class="cart-dot" aria-hidden="true"></span>${esc(STATUS[s].label)}</li>`).join("") + "</ol>";
+    return html + `<p class="cart-track-note">${esc(STATUS[o.status].note)}</p></div>`;
   }
 
   function lineHTML(l) {
@@ -304,8 +399,18 @@
     }
     if (view === "sent") {
       titleEl.textContent = "Order sent!";
-      paint(bodyEl, '<div class="cart-sent"><div class="cart-sent-mark" aria-hidden="true">✓</div>'
-        + (table ? `<p class="cart-table-pill">Table ${esc(table)}</p>` : "") + "<p>Your server will confirm shortly.</p></div>");
+      const o = sentId && tracked.find(t => t.id === sentId);
+      paint(bodyEl, o
+        ? '<div class="cart-sent cart-sent-live"><div class="cart-sent-mark" aria-hidden="true">✓</div><p>Your order is with the restaurant. This updates as they get to it.</p></div>' + trackerHTML(o)
+        : '<div class="cart-sent"><div class="cart-sent-mark" aria-hidden="true">✓</div>'
+          + (table ? `<p class="cart-table-pill">Table ${esc(table)}</p>` : "") + "<p>Your server will confirm shortly.</p></div>");
+      paint(footEl, '<button type="button" class="cart-primary" data-cart-act="close">Back to the menu</button>');
+      return;
+    }
+    if (view === "status") {
+      const active = activeOrders();
+      titleEl.textContent = active.length > 1 ? "Your orders" : "Your order";
+      paint(bodyEl, active.length ? active.map(trackerHTML).join("") : '<p class="cart-empty">No orders in progress.</p>');
       paint(footEl, '<button type="button" class="cart-primary" data-cart-act="close">Back to the menu</button>');
       return;
     }
@@ -330,10 +435,12 @@
       sumEl = bodyEl.querySelector(".cart-sum");
       notesEl = bodyEl.querySelector("textarea");
       notesEl.value = notes;
-      notesEl.addEventListener("input", () => { notes = notesEl.value; save(); });
+      notesEl.addEventListener("input", () => { notes = notesEl.value; pendingId = null; save(); });
     }
     const t = totals();
-    paint(whereEl, table ? `<p class="cart-table-pill">Table ${esc(table)}</p>` : "");
+    const active = activeOrders();
+    paint(whereEl, (table ? `<p class="cart-table-pill">Table ${esc(table)}</p>` : "")
+      + (active.length ? `<button type="button" class="cart-track-link" data-cart-act="status">Earlier order #${esc(active[0].code)}: ${esc(STATUS[active[0].status].label)}. Track it</button>` : ""));
     askEl.hidden = !(askTable && !table && lines.length);
     askErrEl.textContent = tableError;
     askInput.setAttribute("aria-invalid", tableError ? "true" : "false");
@@ -401,7 +508,15 @@
     error = "";
     refresh();
     try {
-      await submitOrder(buildOrder());
+      const order = buildOrder();
+      const { id } = await submitOrder(order);
+      sentId = id;
+      if (id) {
+        tracked.unshift({ id, code: id.slice(0, 4).toUpperCase(), table: order.table, at: Date.now(), status: "new", statusAt: Date.now() });
+        tracked = tracked.slice(0, 10);
+        saveTracked();
+        watchTracked();
+      }
       lines = [];
       notes = "";
       save();
@@ -466,6 +581,9 @@
       refocus(bodyEl, null, "remove");
     } else if (act === "open") {
       openSheet("review", b);
+    } else if (act === "status") {
+      if (!sheet.hidden) { view = "status"; painted.delete(bodyEl); bodyEl.innerHTML = ""; refresh(); titleEl.focus(); }
+      else openSheet("status", b);
     } else if (act === "close") {
       closeSheet();
     } else if (act === "place") {
@@ -487,8 +605,10 @@
 
   function init() {
     load();
+    loadTracked();
     build();
     paintTable();
+    watchTracked();
     doc.classList.add("cart-on");
     document.addEventListener("click", onClick);
     document.addEventListener("keydown", onKey);

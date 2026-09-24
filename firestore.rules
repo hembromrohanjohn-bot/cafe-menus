@@ -1,0 +1,64 @@
+rules_version = '2';
+
+// Security rules for the menu orders. Paste into Firebase console: Firestore Database > Rules > Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Who can see and update each restaurant's orders. To give someone access, add their
+    // sign-in email here (and create their login under Authentication > Users).
+    function staffEmails() {
+      return {
+        'darios': ['hembromrohanjohn@gmail.com']
+      };
+    }
+
+    function isStaff(rid) {
+      return request.auth != null
+        && rid in staffEmails()
+        && request.auth.token.email in staffEmails()[rid];
+    }
+
+    match /restaurants/{rid}/orders/{orderId} {
+      // Guests: place a new order. Only well-formed orders for a known restaurant get in.
+      allow create: if rid in staffEmails()
+        && request.resource.data.keys().hasAll(['restaurant', 'table', 'items', 'notes', 'subtotal', 'serviceCharge', 'total', 'createdAt', 'placedAt', 'status'])
+        && request.resource.data.keys().hasOnly(['restaurant', 'table', 'items', 'notes', 'subtotal', 'serviceCharge', 'total', 'createdAt', 'placedAt', 'status'])
+        && request.resource.data.restaurant == rid
+        && request.resource.data.status == 'new'
+        && request.resource.data.placedAt == request.time
+        && request.resource.data.table is string
+        && request.resource.data.table.matches('^[A-Z]{0,3}[0-9]{1,4}$')
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.items.size() <= 60
+        && request.resource.data.notes is string
+        && request.resource.data.notes.size() <= 300
+        && request.resource.data.subtotal is number
+        && request.resource.data.serviceCharge is number
+        && request.resource.data.total is number
+        && request.resource.data.total >= 0
+        && request.resource.data.total < 1000000
+        && request.resource.data.createdAt is string
+        && request.resource.data.createdAt.size() <= 40;
+
+      // Guests: follow their own order. Order ids are random 20-character codes, so only the phone
+      // that placed an order knows its id. Listing all orders is staff only.
+      allow get: if true;
+      allow list: if isStaff(rid);
+
+      // Staff: move an order along (or cancel it). Nothing else about the order can be changed.
+      allow update: if isStaff(rid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'statusAt', 'statusBy'])
+        && request.resource.data.status in ['new', 'accepted', 'preparing', 'served', 'cancelled']
+        && request.resource.data.statusAt == request.time
+        && request.resource.data.statusBy == request.auth.token.email;
+
+      allow delete: if false;
+    }
+
+    // Everything else is closed.
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

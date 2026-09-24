@@ -6,21 +6,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courgette&family=Antonio:wght@200;400;600&family=Archivo:wght@500;700&family=Lora:ital,wght@0,400;1,400&display=swap">
 <link rel="stylesheet" href="../cart/cart.css">
-<script>
-// Restaurant settings for the shared cart (../cart/cart.js). Everything restaurant-specific lives here.
-window.MENU_CONFIG = {
-  restaurantId: "darios",
-  restaurantName: "Dario's",
-  currency: "₹",
-  locale: "en-IN",
-  serviceChargePercent: 7,
-  orderingEnabled: true,        // false = view-only menu, exactly as before
-  orderWebhookUrl: "",          // empty = orders are only logged; set to the n8n webhook URL later
-  soldOut: [],                  // dish names that can't be ordered today, e.g. ["Tiramisu"]
-  menuSelector: "#pages",       // where the menu items are rendered
-  getItem: id => cartItem(id)   // lets the cart re-check a saved order against today's menu
-};
-</script>
+<script src="config.js"></script>
 <style>
   :root {
     color-scheme: light;

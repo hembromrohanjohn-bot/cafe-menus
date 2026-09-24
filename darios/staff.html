@@ -1,0 +1,38 @@
+<meta charset="utf-8">
+<title>Orders · Dario's</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;600&family=Archivo:wght@500;700&display=swap">
+<link rel="stylesheet" href="../cart/staff.css">
+
+<div class="top">
+  <h1><span id="brand-name">Dario's</span> · Orders</h1>
+  <span class="who" id="who"></span>
+  <button type="button" id="sound" aria-pressed="true">Sound on</button>
+  <button type="button" id="signout" hidden>Sign out</button>
+</div>
+<p class="banner warn" id="offline" hidden>No internet connection. New orders won't appear until it's back.</p>
+<p class="banner warn" id="problem" role="alert" hidden></p>
+<p class="banner info" id="unlock" hidden>Tap anywhere to turn on the new-order sound</p>
+
+<form class="login" id="login-form" hidden>
+  <h2>Staff sign in</h2>
+  <p>Sign in once on this tablet and it stays signed in.</p>
+  <label for="email">Email</label>
+  <input id="email" type="email" autocomplete="username" required>
+  <label for="password">Password</label>
+  <input id="password" type="password" autocomplete="current-password" required>
+  <button type="submit" id="login-btn">Sign in</button>
+  <p class="err" id="login-err" role="alert"></p>
+</form>
+
+<main class="board" id="board" hidden>
+  <section class="col col-new"><h2>New <span class="n" id="count-new">0</span></h2><div class="list" id="list-new"></div></section>
+  <section class="col col-doing"><h2>In progress <span class="n" id="count-doing">0</span></h2><div class="list" id="list-doing"></div></section>
+  <section class="col col-done"><h2>Done <span class="n" id="count-done">0</span></h2><div class="list" id="list-done"></div></section>
+</main>
+
+<script src="config.js"></script>
+<script type="module" src="../cart/staff.js"></script>
