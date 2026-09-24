@@ -4,34 +4,51 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;600&family=Archivo:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courgette&family=Antonio:wght@200;400;600&family=Archivo:wght@500;700&family=Lora:ital,wght@0,400;1,400&display=swap">
 <link rel="stylesheet" href="../cart/staff.css">
+<style>
+  /* Dario's look for the shared staff screen: the menu's plum, mustard and Sicilian tiles */
+  :root {
+    --st-bg: #F5EACB; --st-panel: #FAF1D8; --st-card: #FFFCF2; --st-ink: #4A2A1C; --st-muted: #7E6552; --st-line: #E7D5A8;
+    --st-brand: #5B3A78; --st-brand-deep: #3F2757; --st-brand-ink: #FCF4DC; --st-gold: #E2B53C;
+    --st-new: #B8452F; --st-go: #5B3A78; --st-cooking: #C99A22; --st-done: #6E7F45;
+    --st-font: "Archivo", system-ui, sans-serif; --st-font-strong: "Antonio", "Arial Narrow", sans-serif;
+    --st-font-script: "Courgette", cursive; --st-font-soft: "Lora", Georgia, serif;
+    --st-tile: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23FCF4DC'/%3E%3Cg fill='%234E73A8'%3E%3Cpath d='M32 6c6 8 6 14 0 20-6-6-6-12 0-20z'/%3E%3Cpath d='M32 58c6-8 6-14 0-20-6 6-6 12 0 20z'/%3E%3Cpath d='M6 32c8-6 14-6 20 0-6 6-12 6-20 0z'/%3E%3Cpath d='M58 32c-8-6-14-6-20 0 6 6 12 6 20 0z'/%3E%3C/g%3E%3Cg fill='%23E2B53C'%3E%3Ccircle cx='0' cy='0' r='10'/%3E%3Ccircle cx='64' cy='0' r='10'/%3E%3Ccircle cx='0' cy='64' r='10'/%3E%3Ccircle cx='64' cy='64' r='10'/%3E%3Cpath d='M32 26l6 6-6 6-6-6z'/%3E%3C/g%3E%3Cg fill='%237F8F5A'%3E%3Cellipse cx='16' cy='16' rx='2.2' ry='5' transform='rotate(-45 16 16)'/%3E%3Cellipse cx='48' cy='16' rx='2.2' ry='5' transform='rotate(45 48 16)'/%3E%3Cellipse cx='16' cy='48' rx='2.2' ry='5' transform='rotate(45 16 48)'/%3E%3Cellipse cx='48' cy='48' rx='2.2' ry='5' transform='rotate(-45 48 48)'/%3E%3C/g%3E%3Ccircle cx='32' cy='32' r='2' fill='%23FCF4DC'/%3E%3C/svg%3E");
+  }
+</style>
 
-<div class="top">
-  <h1><span id="brand-name">Dario's</span> · Orders</h1>
-  <span class="who" id="who"></span>
-  <button type="button" id="sound" aria-pressed="true">Sound on</button>
-  <button type="button" id="signout" hidden>Sign out</button>
-</div>
+<div class="tiles" aria-hidden="true"></div>
+<header class="top">
+  <div class="brand"><span class="wordmark">dario`s</span><span class="brand-sub">Orders</span></div>
+  <div class="top-right">
+    <span class="clock" id="clock" aria-hidden="true"></span>
+    <span class="who" id="who"></span>
+    <button type="button" class="pill" id="sound" aria-pressed="true">Sound on</button>
+    <button type="button" class="pill" id="signout" hidden>Sign out</button>
+  </div>
+</header>
 <p class="banner warn" id="offline" hidden>No internet connection. New orders won't appear until it's back.</p>
 <p class="banner warn" id="problem" role="alert" hidden></p>
-<p class="banner info" id="unlock" hidden>Tap anywhere to turn on the new-order sound</p>
+<button type="button" class="banner info" id="unlock" hidden>Tap here to turn on the new-order chime</button>
 
 <form class="login" id="login-form" hidden>
-  <h2>Staff sign in</h2>
-  <p>Sign in once on this tablet and it stays signed in.</p>
-  <label for="username">Username</label>
-  <input id="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
-  <label for="password">Password</label>
-  <input id="password" type="password" autocomplete="current-password" required>
-  <button type="submit" id="login-btn">Sign in</button>
-  <p class="err" id="login-err" role="alert"></p>
+  <div class="login-top"><span class="wordmark">dario`s</span><span class="brand-sub">Staff</span></div>
+  <div class="login-body">
+    <p>Sign in once on this tablet and it stays signed in.</p>
+    <label for="username">Email or username</label>
+    <input id="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button type="submit" id="login-btn">Sign in</button>
+    <p class="err" id="login-err" role="alert"></p>
+  </div>
 </form>
 
 <main class="board" id="board" hidden>
   <section class="col col-new"><h2>New <span class="n" id="count-new">0</span></h2><div class="list" id="list-new"></div></section>
-  <section class="col col-doing"><h2>In progress <span class="n" id="count-doing">0</span></h2><div class="list" id="list-doing"></div></section>
-  <section class="col col-done"><h2>Done <span class="n" id="count-done">0</span></h2><div class="list" id="list-done"></div></section>
+  <section class="col col-doing"><h2>In the kitchen <span class="n" id="count-doing">0</span></h2><div class="list" id="list-doing"></div></section>
+  <section class="col col-done"><h2>Served <span class="n" id="count-done">0</span></h2><div class="list" id="list-done"></div></section>
 </main>
 
 <script src="config.js"></script>

@@ -14,8 +14,8 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;"
 const money = n => (C.currency || "₹") + Math.round(Number(n) || 0).toLocaleString(C.locale || "en-IN");
 const clock = d => d.toLocaleTimeString(C.locale || "en-IN", { hour: "numeric", minute: "2-digit" });
 
-// Staff sign in with a username. Firebase logins need an email address, so a username like "staff"
-// becomes "staff@darios.staff.invalid" behind the scenes (.invalid can never be a real inbox).
+// Staff sign in with a username. Firebase logins need an email address, so a username like "darios"
+// becomes "darios@darios.staff.invalid" behind the scenes (.invalid can never be a real inbox).
 const LOGIN_DOMAIN = `@${C.restaurantId}.staff.invalid`;
 const toLogin = name => (name.includes("@") ? name : name + LOGIN_DOMAIN).trim().toLowerCase();
 const username = user => (user?.email || "").replace(LOGIN_DOMAIN, "");
@@ -37,7 +37,7 @@ let confirmCancel = null;  // order id waiting for a second tap on Cancel
 let busy = new Set();      // order ids with an update on its way
 
 document.title = `Orders · ${C.restaurantName}`;
-$("#brand-name").textContent = C.restaurantName;
+const brandName = $("#brand-name"); if (brandName) brandName.textContent = C.restaurantName;
 
 /* ---------- Sign in ---------- */
 
@@ -143,10 +143,10 @@ function cardHTML(o) {
   if (o.status === "new" || o.status === "accepted")
     actions += `<button class="cancel${confirmCancel === o.id ? " confirm" : ""}" data-act="cancel" data-id="${esc(o.id)}"${busy.has(o.id) ? " disabled" : ""}>${confirmCancel === o.id ? "Tap again to cancel" : "Cancel"}</button>`;
   return `<article class="order" data-status="${esc(o.status)}" data-id="${esc(o.id)}">`
-    + `<header><div class="table">Table ${esc(o.table || "?")}</div><div class="meta"><span class="code">#${esc(o.id.slice(0, 4).toUpperCase())}</span>`
+    + `<header><div class="table"><small>Table</small><b>${esc(o.table || "?")}</b></div><div class="meta"><span class="code">#${esc(o.id.slice(0, 4).toUpperCase())}</span>`
     + `<span class="time${waiting ? " late" : ""}" title="${esc(new Date(placed).toLocaleString())}">${clock(new Date(placed))} · ${ago(placed)}</span></div></header>`
-    + `<ul class="items">${(o.items || []).map(i => `<li><b>${esc(i.qty)}×</b> <span>${esc(i.name)}${i.variant ? ` <em>(${esc(i.variant)})</em>` : ""}</span></li>`).join("")}</ul>`
-    + (o.notes ? `<p class="notes"><b>Note:</b> ${esc(o.notes)}</p>` : "")
+    + `<ul class="items">${(o.items || []).map(i => `<li><span class="qty">${esc(i.qty)}×</span><span>${esc(i.name)}${i.variant ? `<em>${esc(i.variant)}</em>` : ""}</span></li>`).join("")}</ul>`
+    + (o.notes ? `<p class="notes"><b>Note</b>${esc(o.notes)}</p>` : "")
     + `<footer><span class="total">${money(o.total)}</span><span class="state">${esc(f.label)}</span></footer>`
     + (actions ? `<div class="actions">${actions}</div>` : "")
     + "</article>";
@@ -160,13 +160,17 @@ function render() {
   };
   for (const [k, list] of Object.entries(groups)) {
     $(`#count-${k}`).textContent = list.length;
-    $(`#list-${k}`).innerHTML = list.length ? list.map(cardHTML).join("") : `<p class="none">${k === "new" ? "No new orders." : k === "doing" ? "Nothing in progress." : "Nothing yet today."}</p>`;
+    $(`#list-${k}`).innerHTML = list.length ? list.map(cardHTML).join("") : `<p class="none">${k === "new" ? "All caught up. New orders appear here with a chime." : k === "doing" ? "Nothing in the kitchen right now." : "Served orders from today show here."}</p>`;
   }
   const n = groups.new.length;
   document.title = (n ? `(${n}) New · ` : "") + `Orders · ${C.restaurantName}`;
   document.body.classList.toggle("has-new", n > 0);
 }
 setInterval(render, 30000);   // keep "5 min ago" current
+
+const tick = () => { $("#clock").textContent = clock(new Date()); };
+tick();
+setInterval(tick, 15000);
 
 function flash(ids) {
   requestAnimationFrame(() => ids.forEach(id => document.querySelector(`.order[data-id="${CSS.escape(id)}"]`)?.classList.add("arrived")));

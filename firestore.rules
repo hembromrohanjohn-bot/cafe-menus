@@ -4,12 +4,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Who can see and update each restaurant's orders. Staff sign in with a username; the staff screen
-    // turns username "staff" into the login "staff@darios.staff.invalid". To add someone, add their
+    // Who can see and update each restaurant's orders. Staff sign in with this email (or, for a username
+    // like "staff", the staff screen uses "staff@darios.staff.invalid"). To add someone, add their
     // login here and create it under Authentication > Users with a password.
     function staffEmails() {
       return {
-        'darios': ['staff@darios.staff.invalid']
+        'darios': ['darios@gmail.com']
       };
     }
 
