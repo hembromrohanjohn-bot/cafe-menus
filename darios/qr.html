@@ -1,0 +1,102 @@
+<meta charset="utf-8">
+<title>Dario's Table QR Codes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courgette&family=Antonio:wght@200;600&family=Lora:ital@1&display=swap">
+<style>
+  /* Printable sheet of table QR codes. Tables come from the link: qr.html?tables=15 (default below),
+     or a list of codes: qr.html?tables=T1,T2,B3 */
+  :root { --plum: #5B3A78; --mustard: #E2B53C; --cream: #FCF4DC; --brick: #7A2E1C; --ink-soft: #6E5646; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: #E9E1CC; color: var(--brick); font-family: "Lora", Georgia, serif; }
+  .controls { max-width: 210mm; margin: 0 auto; padding: 18px 16px 8px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-family: system-ui, sans-serif; font-size: 14px; color: #3d2a1e; }
+  .controls h1 { margin: 0 auto 0 0; font: 400 26px "Courgette", cursive; color: var(--brick); }
+  .controls label { display: inline-flex; align-items: center; gap: 8px; }
+  .controls input { width: 80px; min-height: 40px; padding: 6px 10px; font: 600 16px system-ui, sans-serif; border: 1.5px solid #c9b78f; border-radius: 8px; }
+  .controls button { min-height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--plum); color: var(--cream); font: 600 15px system-ui, sans-serif; letter-spacing: .04em; cursor: pointer; }
+  .controls p { flex-basis: 100%; margin: 0; color: #6b5a48; }
+
+  /* A4, 3 x 3 cards of 62 x 86 mm with cutting room: 3 x 62 + 2 x 3 = 192 mm fits the 194 mm inside the margins */
+  @page { size: A4; margin: 8mm; }
+  .sheet { max-width: 210mm; margin: 0 auto; padding: 8px 16px 40px; display: grid; grid-template-columns: repeat(auto-fill, 62mm); gap: 3mm; justify-content: center; }
+  .card {
+    width: 62mm; height: 86mm; padding: 5mm 5mm 4mm; background: var(--cream); border: .4mm solid var(--plum); border-radius: 3mm;
+    display: flex; flex-direction: column; align-items: center; text-align: center; break-inside: avoid; page-break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .wordmark { font: 200 30px/0.9 "Antonio", "Arial Narrow", sans-serif; color: var(--plum); }
+  .kicker { margin-top: 1mm; font: 600 7.5pt "Antonio", sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--plum); }
+  .table { margin: 2mm 0 1.5mm; padding: .8mm 4mm; border-radius: 999px; background: var(--plum); color: var(--mustard); font: 600 15pt/1.2 "Antonio", sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+  .qr { width: 38mm; height: 38mm; display: block; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .scan { margin-top: 2mm; font: 400 12pt/1.1 "Courgette", cursive; color: var(--brick); }
+  .url { margin-top: auto; font: italic 5.5pt/1.3 "Lora", serif; color: var(--ink-soft); word-break: break-all; }
+
+  @media print {
+    body { background: #fff; }
+    .controls { display: none; }
+    .sheet { padding: 0; max-width: none; }
+  }
+</style>
+
+<div class="controls">
+  <h1>Table QR codes</h1>
+  <label>Tables <input id="count" type="number" min="1" max="200" inputmode="numeric"></label>
+  <button id="print" type="button">Print</button>
+  <p id="info"></p>
+</div>
+<main class="sheet" id="sheet"></main>
+
+<!-- qrcode-generator 1.4.4 by Kazuhiko Arase, MIT licence -->
+<script src="../tools/qrcode-generator.min.js"></script>
+<script>
+const DEFAULT_TABLES = 15;
+// The menu lives next to this page: .../darios/?table=12
+const MENU_URL = new URL("./", location.href).href.split("?")[0].split("#")[0];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// Same rule the cart uses: numbers or short codes like T12 or B3
+const clean = t => { t = String(t).trim().toUpperCase().replace(/^TABLE\s*/, "").replace(/[\s#-]/g, ""); return /^[A-Z]{0,3}\d{1,4}$/.test(t) ? t : null; };
+
+function tablesFromLink() {
+  const raw = new URLSearchParams(location.search).get("tables");
+  if (!raw) return null;
+  if (/^\d+$/.test(raw.trim())) return Math.min(200, Math.max(1, Number(raw)));
+  const list = raw.split(",").map(clean).filter(Boolean);
+  return list.length ? list : null;
+}
+
+function qrSVG(text) {
+  const qr = qrcode(0, "M");   // smallest version that fits; M = survives ~15% damage
+  qr.addData(text);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+}
+
+function render(tables) {
+  const list = Array.isArray(tables) ? tables : Array.from({ length: tables }, (_, i) => String(i + 1));
+  document.getElementById("sheet").innerHTML = list.map(t => {
+    const url = MENU_URL + "?table=" + encodeURIComponent(t);
+    return `<section class="card" aria-label="Table ${esc(t)}"><div class="wordmark">dario\`s</div><div class="kicker">Italian · Cafe · Bar</div>`
+      + `<div class="table">Table ${esc(t)}</div><div class="qr" data-url="${esc(url)}">${qrSVG(url)}</div>`
+      + `<div class="scan">Scan for the menu<br>&amp; to order</div><div class="url">${esc(url)}</div></section>`;
+  }).join("");
+  const count = document.getElementById("count");
+  count.value = Array.isArray(tables) ? "" : tables;
+  count.disabled = Array.isArray(tables);
+  document.getElementById("info").textContent = `${list.length} cards, 9 per A4 page. Each code opens ${MENU_URL}?table=… Print at 100% scale, then cut along the borders.`;
+}
+
+let tables = tablesFromLink() || DEFAULT_TABLES;
+render(tables);
+document.getElementById("count").addEventListener("change", e => {
+  const n = Math.min(200, Math.max(1, parseInt(e.target.value, 10) || DEFAULT_TABLES));
+  const url = new URL(location.href);
+  url.searchParams.set("tables", n);
+  history.replaceState(null, "", url);
+  render(n);
+});
+document.getElementById("print").addEventListener("click", () => window.print());
+</script>
