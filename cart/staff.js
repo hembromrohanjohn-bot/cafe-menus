@@ -14,6 +14,12 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;"
 const money = n => (C.currency || "₹") + Math.round(Number(n) || 0).toLocaleString(C.locale || "en-IN");
 const clock = d => d.toLocaleTimeString(C.locale || "en-IN", { hour: "numeric", minute: "2-digit" });
 
+// Staff sign in with a username. Firebase logins need an email address, so a username like "staff"
+// becomes "staff@darios.staff.invalid" behind the scenes (.invalid can never be a real inbox).
+const LOGIN_DOMAIN = `@${C.restaurantId}.staff.invalid`;
+const toLogin = name => (name.includes("@") ? name : name + LOGIN_DOMAIN).trim().toLowerCase();
+const username = user => (user?.email || "").replace(LOGIN_DOMAIN, "");
+
 // What each status is called, and the button that moves an order on from it
 const FLOW = {
   new:       { label: "New",        next: "accepted",  button: "Accept" },
@@ -38,7 +44,7 @@ $("#brand-name").textContent = C.restaurantName;
 onAuthStateChanged(auth, user => {
   $("#login-form").hidden = !!user;
   $("#board").hidden = !user;
-  $("#who").textContent = user ? user.email : "";
+  $("#who").textContent = user ? "Signed in as " + username(user) : "";
   $("#signout").hidden = !user;
   if (stopListening) { stopListening(); stopListening = null; }
   if (user) listen();
@@ -53,12 +59,12 @@ $("#login-form").addEventListener("submit", async e => {
   err.textContent = "";
   unlockSound();   // the tap on Sign in lets the browser play the chime later
   try {
-    await signInWithEmailAndPassword(auth, $("#email").value.trim(), $("#password").value);
+    await signInWithEmailAndPassword(auth, toLogin($("#username").value), $("#password").value);
     $("#password").value = "";
   } catch (x) {
     err.textContent = {
-      "auth/invalid-credential": "Wrong email or password.",
-      "auth/invalid-email": "That email address doesn't look right.",
+      "auth/invalid-credential": "Wrong username or password.",
+      "auth/invalid-email": "Usernames can only use letters, numbers, dots, dashes and underscores.",
       "auth/too-many-requests": "Too many tries. Wait a few minutes and try again.",
       "auth/network-request-failed": "No internet connection."
     }[x.code] || "Couldn't sign in: " + (x.code || x.message);
@@ -87,7 +93,7 @@ function listen() {
     console.error("[staff] Order list stopped:", err);
     $("#problem").hidden = false;
     $("#problem").textContent = err.code === "permission-denied"
-      ? `This account (${auth.currentUser?.email}) isn't allowed to see ${C.restaurantName}'s orders. Sign out and use the staff account.`
+      ? `The account "${username(auth.currentUser)}" isn't allowed to see ${C.restaurantName}'s orders. Sign out and use the staff account.`
       : "Lost the connection to the order list. Reload the page.";
   });
 }
