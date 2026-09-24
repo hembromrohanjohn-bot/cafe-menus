@@ -84,7 +84,7 @@
 
   let fbModule = null;
   function firebase() {
-    fbModule = fbModule || import(new URL("orders-firebase.js", CART_SRC).href).catch(err => { fbModule = null; throw err; });
+    fbModule = fbModule || import(new URL("orders-firebase.js" + new URL(CART_SRC).search, CART_SRC).href).catch(err => { fbModule = null; throw err; });
     return fbModule;
   }
 

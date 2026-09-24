@@ -42,6 +42,7 @@ const brandName = $("#brand-name"); if (brandName) brandName.textContent = C.res
 /* ---------- Sign in ---------- */
 
 onAuthStateChanged(auth, user => {
+  $("#booting").hidden = true;
   $("#login-form").hidden = !!user;
   $("#board").hidden = !user;
   $("#who").textContent = user ? "Signed in as " + username(user) : "";

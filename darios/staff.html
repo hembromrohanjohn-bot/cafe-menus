@@ -5,7 +5,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courgette&family=Antonio:wght@200;400;600&family=Archivo:wght@500;700&family=Lora:ital,wght@0,400;1,400&display=swap">
-<link rel="stylesheet" href="../cart/staff.css">
+<link rel="stylesheet" href="../cart/staff.css?v=20260925a">
 <style>
   /* Dario's look for the shared staff screen: the menu's plum, mustard and Sicilian tiles */
   :root {
@@ -31,6 +31,7 @@
 <p class="banner warn" id="offline" hidden>No internet connection. New orders won't appear until it's back.</p>
 <p class="banner warn" id="problem" role="alert" hidden></p>
 <button type="button" class="banner info" id="unlock" hidden>Tap here to turn on the new-order chime</button>
+<p class="booting" id="booting">Loading orders…</p>
 
 <form class="login" id="login-form" hidden>
   <div class="login-top"><span class="wordmark">dario`s</span><span class="brand-sub">Staff</span></div>
@@ -51,5 +52,13 @@
   <section class="col col-done"><h2>Served <span class="n" id="count-done">0</span></h2><div class="list" id="list-done"></div></section>
 </main>
 
-<script src="config.js"></script>
-<script type="module" src="../cart/staff.js"></script>
+<script src="config.js?v=20260925a"></script>
+<script type="module" src="../cart/staff.js?v=20260925a" onerror="bootFailed()"></script>
+<script>
+  // If the order screen can't start (no internet, or a stale copy), say so instead of showing a blank page
+  function bootFailed() {
+    const el = document.getElementById("booting");
+    if (el && !el.hidden) el.innerHTML = "Couldn't load the order screen.<br>Check the internet connection, then reload (Cmd + Shift + R on a Mac, or pull down to refresh on a tablet).";
+  }
+  setTimeout(bootFailed, 15000);
+</script>

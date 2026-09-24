@@ -39,6 +39,8 @@ body.has-new .top { background: var(--st-new); }
 .banner.warn { background: #F9E1DA; color: #8A1C0C; }
 .banner.info { background: #FDF0C4; color: #5C4300; cursor: pointer; }
 
+.booting { margin: 14vh auto; max-width: 520px; padding: 0 20px; text-align: center; font: italic 20px/1.5 var(--st-font-soft); color: var(--st-muted); }
+
 /* Sign in */
 .login { width: min(400px, calc(100% - 32px)); margin: 9vh auto; border-radius: 22px; overflow: hidden; background: var(--st-card); box-shadow: 0 20px 50px rgba(40, 20, 50, .18); }
 .login-top { justify-content: center; padding: 38px 20px 24px; background: var(--st-brand); position: relative; }
