@@ -1,0 +1,657 @@
+<meta charset="utf-8">
+<title>Dario's Menu</title>
+<meta name="description" content="The Dario's menu: Italian kitchen, café, beverages and the bar. Lane 5, Koregaon Park, Pune.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courgette&family=Antonio:wght@200;400;600&family=Archivo:wght@500;700&family=Lora:ital,wght@0,400;1,400&display=swap">
+<link rel="stylesheet" href="../cart/cart.css">
+<script>
+// Restaurant settings for the shared cart (../cart/cart.js). Everything restaurant-specific lives here.
+window.MENU_CONFIG = {
+  restaurantId: "darios",
+  restaurantName: "Dario's",
+  currency: "₹",
+  locale: "en-IN",
+  serviceChargePercent: 7,
+  orderingEnabled: true,        // false = view-only menu, exactly as before
+  orderWebhookUrl: "",          // empty = orders are only logged; set to the n8n webhook URL later
+  soldOut: [],                  // dish names that can't be ordered today, e.g. ["Tiramisu"]
+  menuSelector: "#pages",       // where the menu items are rendered
+  getItem: id => cartItem(id)   // lets the cart re-check a saved order against today's menu
+};
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --plum: #5B3A78;
+    --plum-deep: #3F2757;
+    --mustard: #E2B53C;
+    --gold: #B8862A;
+    --cream: #FCF4DC;
+    --paper: #F5EACB;
+    --brick: #7A2E1C;
+    --ink-soft: #6E5646;
+    --blue: #4E73A8;
+    --olive: #7F8F5A;
+    --line: #E7D5A8;
+    --accent: var(--plum);
+    --script: "Courgette", "Brush Script MT", cursive;
+    --cond: "Antonio", "Avenir Next Condensed", "Arial Narrow", sans-serif;
+    --sans: "Archivo", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --serif: "Lora", Georgia, serif;
+    /* Sicilian majolica tile, after the lemon and cobalt tiles on the printed menu */
+    --tile: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23FCF4DC'/%3E%3Cg fill='%234E73A8'%3E%3Cpath d='M32 6c6 8 6 14 0 20-6-6-6-12 0-20z'/%3E%3Cpath d='M32 58c6-8 6-14 0-20-6 6-6 12 0 20z'/%3E%3Cpath d='M6 32c8-6 14-6 20 0-6 6-12 6-20 0z'/%3E%3Cpath d='M58 32c-8-6-14-6-20 0 6 6 12 6 20 0z'/%3E%3C/g%3E%3Cg fill='%23E2B53C'%3E%3Ccircle cx='0' cy='0' r='10'/%3E%3Ccircle cx='64' cy='0' r='10'/%3E%3Ccircle cx='0' cy='64' r='10'/%3E%3Ccircle cx='64' cy='64' r='10'/%3E%3Cpath d='M32 26l6 6-6 6-6-6z'/%3E%3C/g%3E%3Cg fill='%237F8F5A'%3E%3Cellipse cx='16' cy='16' rx='2.2' ry='5' transform='rotate(-45 16 16)'/%3E%3Cellipse cx='48' cy='16' rx='2.2' ry='5' transform='rotate(45 48 16)'/%3E%3Cellipse cx='16' cy='48' rx='2.2' ry='5' transform='rotate(45 16 48)'/%3E%3Cellipse cx='48' cy='48' rx='2.2' ry='5' transform='rotate(-45 48 48)'/%3E%3C/g%3E%3Ccircle cx='32' cy='32' r='2' fill='%23FCF4DC'/%3E%3C/svg%3E");
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { scroll-padding-top: 150px; }
+  body { margin: 0; background: var(--plum-deep); color: var(--brick); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2.5px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
+
+  .book { max-width: 620px; margin-inline: auto; background: var(--cream); min-height: 100vh; box-shadow: 0 0 0 1px rgba(0,0,0,.08), 0 20px 60px rgba(0,0,0,.35); }
+
+  /* Cover */
+  .tiles { height: 34px; background: var(--tile) 0 0 / 34px 34px; border-bottom: 3px solid var(--mustard); }
+  .cover { background: var(--plum); color: var(--mustard); padding-block: 34px 28px; padding-inline: 20px; text-align: center; display: grid; justify-items: center; gap: 10px; }
+  .wordmark { font-family: var(--cond); font-weight: 200; font-size: 64px; line-height: .9; letter-spacing: .01em; margin: 0; }
+  .cover .kicker { font-family: var(--sans); font-weight: 500; font-size: 14px; letter-spacing: .06em; display: flex; gap: 8px; align-items: center; }
+  .cover .kicker i { width: 5px; height: 5px; background: currentColor; display: inline-block; }
+  .cover .line { font-family: var(--script); font-size: 22px; line-height: 1.3; max-width: 28ch; text-wrap: balance; color: #F3E3B0; margin-top: 4px; }
+  .cover .facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; font-family: var(--cond); font-weight: 400; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; color: #F3E3B0; }
+  .cover .facts span + span::before { content: "·"; margin-right: 14px; opacity: .6; }
+
+  /* Sticky controls */
+  .bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--cream); border-bottom: 1px solid var(--line); box-shadow: inset 0 3px 0 var(--accent); transition: box-shadow .25s; }
+  .bar-top { display: flex; align-items: center; gap: 10px; padding: 14px 16px 8px; flex-wrap: wrap; }
+  .tabs { display: inline-flex; border: 1px solid var(--brick); border-radius: 999px; padding: 3px; gap: 2px; }
+  .tabs button { border: 0; background: none; cursor: pointer; padding: 6px 13px; border-radius: 999px; font-family: var(--cond); font-weight: 600; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--brick); }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: var(--cream); }
+  .gf { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-family: var(--cond); font-weight: 600; font-size: 15px; letter-spacing: .05em; text-transform: uppercase; cursor: pointer; user-select: none; white-space: nowrap; }
+  .gf input { appearance: none; -webkit-appearance: none; width: 36px; height: 21px; border-radius: 999px; background: var(--line); position: relative; margin: 0; cursor: pointer; transition: background .2s; }
+  .gf input::after { content: ""; position: absolute; top: 2.5px; left: 2.5px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .gf input:checked { background: var(--olive); }
+  .gf input:checked::after { transform: translateX(15px); }
+  .search { padding: 0 16px 10px; }
+  .search input { width: 100%; font: 500 16px var(--sans); color: var(--brick); background: #FFFBEE; border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 13px; }
+  .search input::placeholder { color: #A98E78; }
+  .search input:focus { outline: none; border-color: var(--blue); }
+  .chips { display: flex; gap: 22px; overflow-x: auto; padding: 0 20px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; border: 0; background: none; cursor: pointer; padding: 6px 0 9px; font-family: var(--script); font-size: 18px; line-height: 1.1; white-space: nowrap; color: var(--brick); opacity: .5; border-bottom: 2px solid transparent; transition: opacity .2s, border-color .2s; }
+  .chip:hover { opacity: .8; }
+  .chip.on { opacity: 1; border-bottom-color: var(--brick); }
+
+  /* Pages */
+  .pages { padding: 4px 20px 34px; }
+  section.sec { padding-top: 36px; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .sec-head h2 { margin: 0; font-family: var(--script); font-weight: 400; font-size: 38px; line-height: 1.1; color: var(--brick); }
+  .sec-head .en { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--ink-soft); letter-spacing: .03em; }
+  .sec-head::after { content: ""; flex: 1 1 40px; height: 1.5px; background: var(--accent); opacity: .55; align-self: center; }
+  .sec-note { margin: 6px 0 0; font-family: var(--serif); font-size: 14px; color: var(--ink-soft); font-style: italic; }
+  .item { display: grid; grid-template-columns: 1fr auto; gap: 3px 14px; padding: 13px 0; border-bottom: 1px dashed var(--line); }
+  .item:last-child { border-bottom: 0; }
+  .item h3 { margin: 0; font-family: var(--sans); font-weight: 700; font-size: 15px; letter-spacing: .03em; text-transform: uppercase; line-height: 1.3; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: var(--brick); }
+  .item .price { font-family: var(--sans); font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; letter-spacing: .04em; }
+  .item .price.ask { font-family: var(--serif); font-weight: 400; font-style: italic; font-size: 14px; color: var(--ink-soft); letter-spacing: 0; }
+  .item p { grid-column: 1 / -1; margin: 0; font-family: var(--serif); font-style: italic; font-size: 14.5px; line-height: 1.5; color: var(--ink-soft); max-width: 58ch; letter-spacing: .01em; }
+  .item .aka { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--gold); }
+  .tag { font-family: var(--cond); font-weight: 600; font-size: 11.5px; letter-spacing: .1em; padding: 1px 6px; border-radius: 999px; border: 1px solid; line-height: 1.4; }
+  .tag.gf { color: #8A6512; border-color: var(--mustard); }
+  .tag.v { color: #5A6B34; border-color: var(--olive); }
+  .loved { font-family: var(--script); font-size: 15px; letter-spacing: 0; text-transform: none; font-weight: 400; color: var(--blue); }
+  .loved::before { content: "✦ "; font-size: 11px; vertical-align: 1px; }
+  .extras { margin-top: 16px; border: 1.5px solid var(--brick); background: #FFF9E8; }
+  .extras b { display: block; background: var(--brick); color: var(--cream); padding: 7px 12px; font-family: var(--cond); font-weight: 600; font-size: 14px; letter-spacing: .1em; text-transform: uppercase; }
+  .extras ul { list-style: none; margin: 0; padding: 6px 12px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 0 18px; }
+  .extras li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 13.5px; border-bottom: 1px dotted var(--line); }
+  .extras li span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .picks-btn { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--gold); background: var(--mustard); color: var(--plum-deep); cursor: pointer; padding: 6px 14px; min-height: 36px; border-radius: 999px; font-family: var(--cond); font-weight: 600; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+  .picks-btn[aria-pressed="true"] { background: var(--plum); border-color: var(--plum); color: var(--mustard); }
+  .picks-intro { margin: 8px 0 4px; font-family: var(--serif); font-style: italic; font-size: 14.5px; line-height: 1.5; color: var(--ink-soft); max-width: 52ch; }
+  .pick { grid-template-columns: 34px 1fr auto; }
+  .pick .rank { grid-row: span 3; font-family: var(--script); font-size: 26px; line-height: 1; color: var(--gold); }
+  .pick .from { grid-column: 2 / -1; font-family: var(--cond); font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--blue); }
+  .pick p { grid-column: 2 / -1; }
+  .pick .jump { grid-column: 2 / -1; justify-self: start; border: 0; background: none; padding: 4px 0; cursor: pointer; font-family: var(--cond); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--brick); text-decoration: underline; text-underline-offset: 3px; }
+  /* Cart (../cart/cart.js): match the menu, and put the Add control under the price */
+  :root { --cart-accent: #5B3A78; --cart-accent-ink: #FCF4DC; --cart-ink: var(--brick); --cart-muted: var(--ink-soft); --cart-bg: var(--cream); --cart-line: var(--line); --cart-font: var(--sans); --cart-font-strong: var(--cond); --cart-font-head: var(--script); --cart-font-soft: var(--serif); --cart-max: 620px; }
+  .table-strip { padding: 7px 16px 6px; background: var(--plum); color: var(--mustard); text-align: center; font-family: var(--cond); font-weight: 600; font-size: 16px; letter-spacing: .16em; text-transform: uppercase; }
+  .cart-on .item > .cart-ctl { grid-column: -2; grid-row: 2 / span 3; align-self: start; justify-self: end; }
+  .cart-on .item:not(.pick) > p { grid-column: 1; }
+  .cart-on .pick > .from, .cart-on .pick > p, .cart-on .pick > .jump { grid-column: 2; }
+  .empty { text-align: center; padding: 44px 10px; font-family: var(--script); font-size: 22px; color: var(--ink-soft); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-soft); padding: 16px 0 0; align-items: center; }
+  .legend > span { display: inline-flex; align-items: center; gap: 6px; }
+
+  footer { background: var(--plum); color: #EADCB6; padding-block: 24px 30px; padding-inline: 20px; text-align: center; font-size: 13px; line-height: 1.55; display: grid; gap: 6px; justify-items: center; }
+  footer .wordmark { font-size: 40px; color: var(--mustard); margin-bottom: 4px; }
+  footer a { color: var(--mustard); }
+  footer .concept { font-family: var(--cond); letter-spacing: .14em; text-transform: uppercase; font-size: 12px; margin-top: 6px; opacity: .8; }
+</style>
+
+<div class="book">
+  <div class="tiles" aria-hidden="true"></div>
+  <header class="cover">
+    <h1 class="wordmark">dario`s</h1>
+    <div class="kicker">Italian <i></i> Cafe <i></i> Bar</div>
+    <div class="line">Dessert in one hand, coffee in the other.</div>
+    <div class="facts"><span>Lane 5, Koregaon Park</span><span>Pet friendly</span></div>
+  </header>
+
+  <div class="bar">
+    <div class="table-strip" data-cart-table hidden></div>
+    <div class="bar-top">
+      <div class="tabs" role="tablist" aria-label="Menu">
+        <button role="tab" aria-selected="true" data-tab="italian">Italian</button>
+        <button role="tab" aria-selected="false" data-tab="cafe">Café</button>
+        <button role="tab" aria-selected="false" data-tab="drinks">Drinks</button>
+        <button role="tab" aria-selected="false" data-tab="bar">Bar</button>
+      </div>
+      <button class="picks-btn" id="picks" aria-pressed="false">★ Bestsellers</button>
+      <label class="gf" id="gf-wrap"><input type="checkbox" id="gf-only"> Gluten free</label>
+    </div>
+    <div class="search"><input id="q" type="search" aria-label="Search the menu" placeholder="Search dishes, drinks, ingredients" autocomplete="off"></div>
+    <nav class="chips" id="chips" aria-label="Sections"></nav>
+  </div>
+
+  <main class="pages" id="pages"></main>
+
+  <footer>
+    <span class="wordmark">dario`s</span>
+    <div>All prices in rupees. GST as applicable and a 7% service charge.</div>
+    <div>Every dish on this menu is vegetarian. Alcohol is served only to guests of legal drinking age. Please tell us about any allergies.</div>
+    <div><a href="https://www.instagram.com/dariospune/" target="_blank" rel="noopener">@dariospune</a> · +91 89566 10501</div>
+    <div class="concept">Digital menu concept for Dario's</div>
+  </footer>
+</div>
+
+<script>
+// [name, price, description, tags, options]  tags: "gf" gluten free, "v" vegan, "gf v" both. price null = ask your server
+// options (optional): choices at the same price, e.g. ["Red", "White"]; each becomes its own line in the cart
+const TAB_COLOURS = { italian: "#5B3A78", cafe: "#C99A22", drinks: "#4479A8", bar: "#3F2757" };
+const MENU = {
+  italian: [
+    { name: "Zuppa", en: "Soup", items: [
+      ["Minestrone", 320, "A vegetable broth with chunks of fresh vegetables and parmesan cheese", "gf"],
+      ["Pomodoro", 290, "A thick tomato soup with onions and basil", "gf"],
+      ["Funghi", 335, "Cream of mushroom soup", "gf"],
+      ["Broccoli", 350, "Cream of broccoli soup with onions and roasted almonds", "gf"],
+      ["Asparagi", 390, "Cream of asparagus soup", "gf"],
+      ["Lentil & Spinach Soup", 370, "A healthy Italian soup with garlic and onion", "gf v"]
+    ]},
+    { name: "Insalata", en: "Salad", items: [
+      ["Mista", 490, "Mixed lettuce with tomatoes, olives, cheese, artichoke with mustard dressing", "gf"],
+      ["Armerina", 470, "Fresh tomatoes, onions, cucumber, olives and feta cheese, drizzled with extra virgin olive oil", "gf"],
+      ["Aranciazzola", 490, "Mixed salad leaves with fresh orange, spring onion, gorgonzola cheese, fresh herbs and olives", "gf"],
+      ["San Marco", 500, "Cherry tomatoes, Italian cheese, olives, avocado, mixed lettuce and herbs, in a Sicilian dressing", "gf"],
+      ["Cesare", 500, "Lettuce, black olives, parmesan shavings, crunchy croutons with a creamy mustard and mayonnaise dressing", ""],
+      ["Verdure Grigliate", 480, "Grilled baby potatoes and mixed vegetables, served warm", "gf v"],
+      ["Ceci Vitali", 520, "Chickpeas, quinoa, pomegranate, rucola leaves, pears, bocconcini cheese with a lemon and olive oil dressing", "gf"],
+      ["Spacchiusa", 520, "Fresh salad leaves, carrots, orange and pomegranate, mint, feta cheese, roasted almonds, dressed in balsamic vinegar", "gf"]
+    ]},
+    { name: "Antipasti", en: "Starters", items: [
+      ["Nachos Messicani", 490, "Mexican-style nachos with cheese sauce and green peppers", ""],
+      ["Pane Aglio e Burro", 260, "Garlic bread with butter and parsley", ""],
+      ["Pane Aglio Burro e Formaggio", 300, "Garlic bread with cheese", ""],
+      ["Patate al Formaggio", 520, "Roasted baby potato tossed in creamy parmesan and sage, served in a parmesan basket", ""],
+      ["Bruschetta Classica", 420, "Crunchy bread with fresh tomatoes, oregano, olive oil and garlic", "v"],
+      ["Funghi Dario's", 480, "Whole roasted mushrooms with lemon, garlic, parsley and extra virgin olive oil", "gf v"],
+      ["Funghi Saltati", 460, "Pan-fried mushrooms with garlic and chilli, served with a crostini", "gf"],
+      ["Focaccia Farcita", 320, "Flat bread stuffed with cheese and herbs, served with a sun-dried tomato dip", ""],
+      ["Crema di Spinaci", 390, "Spinach and fresh cheese dip with parmesan, served with pita bread", ""],
+      ["Rotondino", 460, "Fried cheese balls with corn and jalapeños", ""],
+      ["Caprese", 490, "Classic Italian dish with fresh tomatoes, bocconcini, basil, oregano and olive oil", ""],
+      ["Anelli di Cipolla", 440, "Crispy fried onion rings with herbs, served with a sun-dried tomato and red chilli dip", ""],
+      ["Arancinelle", 480, "Sicilian rice balls stuffed with peas and cheese, served with a creamy tomato sauce and red chilli", ""],
+      ["Asparagi Cabbasisi", 490, "Fresh asparagus with lemon, olive oil and parmesan shavings", "gf"],
+      ["Polpette di Spinaci & Formaggio", 460, "Spinach and fresh cheese balls, served with a spinach cheese dip", ""],
+      ["Mixed Assorted Crostini", 440, "Toasted baguette slices with assorted toppings", ""],
+      ["The Perfect Pair", 520, "Mini platter of cheese and olives", "gf"],
+      ["Hummus with Pita Bread", 390, "Creamy hummus, olive oil, paprika, warm pita bread", "v"],
+      ["Guacamole with Savoury Tarts", 490, "Mashed avocado, onion, tomato, lime juice, served in savoury tarts", ""]
+    ]},
+    { name: "Breads", items: [
+      ["Toasted Farmer's Bread", 100, "Two slices", ""],
+      ["Assorted Bread Basket", 140, "", ""],
+      ["Toasted Gluten Free Bread", 150, "Two slices", "gf"],
+      ["Toasted Sourdough with Butter", 150, "Two slices", ""],
+      ["Homemade Focaccia Bread", 75, "", ""]
+    ]},
+    { name: "Pasta", items: [
+      ["Penne Pomodoro", 650, "Classic tomato sauce, basil and cheese", ""],
+      ["Penne Arrabbiata", 680, "Spicy tomato sauce, red chilli and onion", ""],
+      ["Penne Sgambato", 690, "Bell peppers, tomato, onion, cream and red chilli flakes", ""],
+      ["Penne Seminara", 690, "Spinach, cream, mushroom, garlic, sun-dried tomato reduction and parmesan", ""],
+      ["Spaghetti Aglio Olio Peperoncino", 670, "Traditional South Italian dish with garlic, red chilli and extra virgin olive oil", ""],
+      ["Spaghetti Crastusi", 690, "Olives, broccoli and mushrooms in a creamy tomato sauce", ""],
+      ["Spaghetti Normanni", 680, "Creamy tomato, thyme, porcini mushrooms and gorgonzola cheese", ""],
+      ["Fusilli con Broccoli", 670, "Broccoli, capers, sun-dried tomatoes, olives, garlic, chilli and parmesan", ""],
+      ["Fusilli Pesto & Patate", 680, "Basil, extra virgin olive oil, garlic, parmesan, nuts and potato", ""],
+      ["Fusilli Vitale", 680, "Spicy tomato sauce with mushrooms, sun-dried tomato, garlic and parsley", ""],
+      ["Fusilli Rocco", 660, "Fresh tomato sauce, garlic, red chilli, capers and olives", ""],
+      ["Ravioli Chiaramonte", 690, "Homemade ravioli stuffed with spinach and cheese in a creamy tomato broccoli sauce with bell peppers and sun-dried tomato", ""],
+      ["Ravioli Kamarina", 690, "Homemade ravioli stuffed with spinach and cheese, in a creamy tomato sauce with rosemary and parmesan", ""],
+      ["Ravioli Burro & Salvia", 650, "Homemade ravioli stuffed with spinach and cheese, with butter, sage and parmesan", ""],
+      ["Gnocchi Barbaresca", 680, "Homemade gnocchi in a tomato sauce with cream", ""],
+      ["Gnocchi do Massa Gnazu", 680, "Homemade gnocchi with rucola, in a spicy tomato and cream sauce with cheese", ""],
+      ["Gnocchi ai Formaggi di Salaparuta", 680, "Homemade gnocchi with thyme and a combination of Italian cheeses", ""],
+      ["Lasagne Buzzurri", 690, "Layers of homemade pasta baked with tomatoes, red, yellow and green bell peppers in beschiamella, topped with parmesan", ""],
+      ["Cannelloni al Forno", 690, "Homemade pasta stuffed with mushroom, spinach and cheese, baked with fresh tomato sauce and beschiamella", ""],
+      ["Tortellini Passalacqua", 680, "Tomato sauce, aubergine, onions, garlic, olives, bell pepper and chilli", ""],
+      ["Linguine Cacio e Pepe", 670, "Butter, parmesan cheese and black pepper", ""],
+      ["Rigatoni alla Norma", 680, "Tomato sauce, aubergine and ricotta cheese", ""]
+    ]},
+    { name: "Pizza", extras: ["Extra toppings", [
+        ["Assorted vegetables", 120], ["Sun-dried tomatoes, artichokes or asparagus", 80], ["Olives or jalapeño", 90],
+        ["Mushrooms", 75], ["Broccoli", 80], ["Parmesan (grated) or sun-dried tomato pâté", 100],
+        ["Parmesan (shavings)", 110], ["Capers", 145], ["Extra virgin olive oil", 120], ["Truffle oil", 220]
+      ]], items: [
+      ["Margherita", 650, "Fresh tomato sauce, mozzarella cheese and basil", ""],
+      ["Bellassai", 650, "Fresh tomato sauce, mozzarella cheese and onion", ""],
+      ["Turturro", 710, "Tomato sauce, mozzarella cheese, jalapeños, sun-dried tomato", ""],
+      ["Forestale", 730, "Fresh tomato sauce, onion, garlic, mushrooms and mozzarella cheese", ""],
+      ["Rucola", 730, "Fresh tomato sauce, mozzarella cheese, rucola and parmesan shavings", ""],
+      ["Patapazza", 740, "Spiced mozzarella, tomato sauce, French fries", ""],
+      ["Piccante", 740, "Spicy tomato sauce, mozzarella cheese, green capsicum, jalapeños, corn and olives", ""],
+      ["Calzone", 740, "A closed pizza stuffed with tomato sauce, mushrooms, onions, olives, mozzarella and ricotta cheese", ""],
+      ["Stromboli", 750, "Spicy tomato sauce, mozzarella cheese, red chilli, sun-dried tomatoes and spinach", ""],
+      ["Pestifero", 750, "Pesto sauce, mozzarella cheese, tomatoes, broccoli, sun-dried tomato, garlic and parmesan shavings", ""],
+      ["Quattro Formaggi", 770, "Mozzarella, gorgonzola, parmesan and ricotta", ""],
+      ["Indiana", 770, "Spicy tomato sauce, mozzarella cheese, jalapeños, onions, bell pepper, capers and garlic", ""],
+      ["Siciliano", 790, "Spicy tomato sauce, mozzarella cheese, olives, bell peppers, artichokes, capers and sun-dried tomatoes", ""],
+      ["Carduni", 790, "Fresh tomato sauce, mozzarella cheese, red and yellow bell peppers, mushrooms, garlic, olives, broccoli and sun-dried tomatoes", ""]
+    ]},
+    { name: "Risotto", items: [
+      ["Risotto Siciliano", 690, "Tomato sauce, aubergines, red chilli and cheese", ""],
+      ["Risotto ai Funghi Porcini", 710, "Creamy rice with porcini mushrooms, garlic, cream and parmesan cheese", "gf"],
+      ["Risotto al Ragù di Tofu", 660, "Minced tofu, tomatoes and seasonal vegetables", "gf"],
+      ["Risotto con Asparagi", 690, "Creamy rice with asparagus, onion, cream, parsley and parmesan cheese", "gf"],
+      ["Cous Cous Trapanese", 650, "Couscous with grilled Mediterranean vegetables, chickpeas and raisins with a tomato and herb sauce", ""]
+    ]},
+    { name: "Secondi Piatti", en: "Main course", items: [
+      ["Arrosto di Bell Peppers", 650, "Stuffed red and yellow bell peppers, capers, potatoes, onions, garlic, parmesan, parsley, black pepper, spicy cherry tomato sauce", ""],
+      ["Melanzane Parmigiana", 680, "Oven-baked aubergines with basil, tomatoes and assorted Italian cheese, served with garlic bread", ""],
+      ["Rori da Zia Mariula", 650, "Whole tomatoes stuffed with broccoli, onions, bell peppers, zucchini, parmesan and fresh herbs, with mashed potatoes and a creamy tomato sauce", ""],
+      ["Involtini di Zucchine", 610, "Grilled zucchini stuffed with vegetables, baked with tomato sauce and parmesan cheese", ""],
+      ["Crespelle ai Funghi", 650, "Baked pancakes filled with mushrooms, garlic, cheese, tomatoes, peas and beschiamella", ""],
+      ["Crespelle Primavera", 650, "Baked pancakes filled with broccoli, carrots, peas, tomatoes, bell peppers, cauliflower and onions, topped with beschiamella", ""]
+    ]},
+    { name: "Global Table", items: [
+      ["Swiss Cheese Fondue", 890, "Classic fondue of melted Gruyère and Emmental, served warm with bread and vegetables for dipping", ""],
+      ["Mediterranean Salad", 450, "Cucumber, red onion, tomatoes and parsley with fluffy couscous and a side of creamy hummus", ""],
+      ["Black Bean Enchiladas", 480, "Corn tortillas stuffed with black beans, rice and vegetables, with tomato sauce and cheddar", ""],
+      ["Spicy Tofu Steak", 560, "Marinated tofu steak with a spicy cherry tomato sauce and sautéed vegetables", ""],
+      ["Good Old Fashioned Mac & Cheese", 590, "Macaroni in a cheese sauce, baked in a skillet with a breadcrumb and parmesan crust", ""],
+      ["Smoked Paella with a Veg Curry", 470, "Spanish-style smoked tomato paella cooked with red wine, served with a creamy vegetable curry", ""],
+      ["Cottage Cheese in a Garlic Butter Sauce", 480, "Freshly made cottage cheese in a rich, creamy, herbed garlic butter sauce", ""],
+      ["Shepherd's Pie", 510, "Mixed vegetables and red beans under a golden baked mashed potato topping", ""],
+      ["Mushroom Stroganoff", 520, "Sautéed mushrooms, onion and garlic in a tangy sauce, with herbed rice and sour cream", ""],
+      ["Chickpea Stew", 550, "Chickpeas, tomatoes, vegetables and warm spices, served with herbed focaccia", ""]
+    ]},
+    { name: "Dolce", en: "Dessert", items: [
+      ["Tiramisu", 400, "", ""],
+      ["Tangy Lemon Tart", 325, "", ""],
+      ["Baked Yoghurt Tart", 325, "", ""],
+      ["Salted Caramel Chocolate Tart", 325, "", ""],
+      ["Tris of Mini Tarts", 425, "", ""],
+      ["Bomba al Cioccolato", 425, "With ice cream", ""],
+      ["Mousse al Cioccolato", 375, "", ""],
+      ["Apple Pie with Cinnamon", 375, "Served with ice cream", ""],
+      ["Panna Cotta", 375, "", ""],
+      ["Lemon Cheesecake", 400, "", ""],
+      ["Blueberry Cheesecake", 400, "", ""],
+      ["Rich Dark Chocolate Cake", 400, "", ""],
+      ["Fresh Fruit Cream Cake", 400, "Seasonal", ""],
+      ["Chocolate Orange Cake", 400, "", ""],
+      ["Black Forest Cake", 400, "", ""],
+      ["Brownie with Ice Cream", 425, "With chocolate sauce", ""],
+      ["Crepes al Cioccolato", 425, "Pancakes filled with thick chocolate mousse, drizzled with a rich chocolate sauce", ""]
+    ]},
+    { name: "Ice cream & tea cakes", items: [
+      ["Vanilla", 180, "", ""], ["Chocolate", 180, "", ""], ["Strawberry", 180, "", ""], ["Butterscotch", 180, "", ""],
+      ["Affogato", 320, "Espresso poured over vanilla ice cream", ""],
+      ["Banana and Raisin Tea Cake", 180, "Add ice cream for 75", "gf v"],
+      ["Apple and Prunes Tea Cake", 180, "Add ice cream for 75", "v"]
+    ]}
+  ],
+  cafe: [
+    { name: "The Breakfast Table", items: [
+      ["Butter Croissant", 180, "", ""],
+      ["Chocolate Croissant", 200, "", ""],
+      ["Mushroom and Cheese Croissant", 260, "", ""],
+      ["Cinnamon Roll", 180, "", ""],
+      ["Waffles", 360, "Butter and honey, or chocolate", "", ["Butter and honey", "Chocolate"]],
+      ["Blueberry Pancakes", 480, "Homemade pancakes with butter and blueberry topping", ""],
+      ["Strawberry & Chocolate Pancakes", 520, "Homemade pancakes with butter, fresh strawberry and chocolate", ""],
+      ["Mixed Fruit Bowl", 410, "A bowl of fresh seasonal fruit", ""],
+      ["Chocolate Smoothie Bowl", 460, "", ""],
+      ["Seasonal Smoothie Bowl", 380, "Fruits or berries", "", ["Fruits", "Berries"]]
+    ]},
+    { name: "Savoury Crepes", items: [
+      ["Cheese & Onion Crepe", 440, "Served with a cheese sauce", ""],
+      ["Mushroom & Garlic Crepe", 440, "Served with a tomato sauce", ""]
+    ]},
+    { name: "Open Toasts", note: "Gluten free bread is 45 extra per slice.", items: [
+      ["Avocado Toast", 470, "Sourdough bread, cheese pâté, avocado on a bed of caramelised onions", ""],
+      ["Dario's French Toast", 300, "Golden pan-seared thick toast soaked in custard, topped with seasonal berries, powdered sugar and cinnamon", ""],
+      ["Cheese & Chilly Toast", 320, "", ""],
+      ["Beans on Toast", 320, "With salsa and cheese", ""],
+      ["Toast with Homemade Jam", 180, "", ""]
+    ]},
+    { name: "Small Bites", items: [
+      ["Veg Cutlet", 250, "", ""],
+      ["Mushroom Quiche Tart", 220, "", ""],
+      ["French Fries", 250, "", ""],
+      ["Truffle & Parmesan Fries", 320, "", ""],
+      ["Peri Peri French Fries", 280, "", ""],
+      ["Hash Browns", 180, "", ""]
+    ]},
+    { name: "All Day Signatures", items: [
+      ["Chickpea Omelette", 380, "With mushrooms, vegetables and cheese, served with a slice of bread and grilled tomato", ""],
+      ["Potato Rösti", 380, "Grated potato pancake with a cheese and vegetable filling", ""],
+      ["Tortilla Wrap Roll", 440, "Hummus, cottage cheese, pickled vegetables, jalapeños and coleslaw in a mayonnaise dressing", ""],
+      ["Pita Pocket with Falafel", 420, "Hummus, cucumber, tomato, onions, falafel and feta with a Greek tzatziki spread", ""],
+      ["Tofu Scramble", 430, "Scrambled tofu with cream, onion, cheese, spices and herbs", ""],
+      ["Quinoa Bowl", 450, "Quinoa with onion, seedless tomato, mixed vegetables, parsley and seasoning, cooked in extra virgin olive oil", ""],
+      ["Grilled Sweet Potato Plate", 450, "Sweet potato rounds glazed with chilli and lime over garlic spinach, with herbed yoghurt and crispy nacho chips", ""]
+    ]},
+    { name: "Sandwiches & Burgers", note: "All served with a side of mixed lettuce and French fries.", items: [
+      ["Quattro Formaggi Sandwich", 480, "White bread with a four cheese melt: processed cheese, English cheddar, ricotta and Emmental", ""],
+      ["Massaro (Mushroom Melt)", 440, "Mini French loaf with sautéed mushrooms, a touch of balsamic, English cheddar, processed cheese and olive oil", ""],
+      ["Caprese Sandwich in Ciabatta", 460, "Pesto, mixed lettuce, tomato slices, bocconcini, salt, pepper and olive oil", ""],
+      ["Focaccia San Giorgio", 470, "Toasted focaccia with butter, zucchini, onions, tomatoes, feta and fresh lettuce with a pesto spread", ""],
+      ["Melanzane", 460, "Sourdough with sun-dried tomato pâté, pickled aubergine, garlic, olives, herbs, capers and cheese", ""],
+      ["Veg Club Sandwich", 450, "Vegetables, fresh lettuce, tomato, cheese and mayonnaise between toasted bread", ""],
+      ["Red Bun Sliders", 480, "Two red bun sliders with veg patty, onion, cheese melt and lettuce with a mustard mayonnaise", ""],
+      ["Lentil Burger", 480, "Homemade burger bun with a lentil patty, tomato chutney, cheese melt, green leaves and mayonnaise", ""]
+    ]}
+  ],
+  drinks: [
+    { name: "Hot Coffee", note: "All our coffees are made with 100% arabica beans. Swap for alternative milk at 100 extra.", items: [
+      ["Espresso", 180, ""], ["Americano", 180, ""], ["Cappuccino", 220, ""], ["Latte", 220, ""], ["Macchiato", 220, ""],
+      ["Cortado", 220, ""], ["Bombón", 240, ""], ["Salted Caramel Latte", 240, ""], ["Mocha", 260, ""]
+    ]},
+    { name: "Iced Coffee", items: [
+      ["Iced Espresso", 200, ""], ["Iced Americano", 200, ""], ["Iced Latte", 250, ""], ["Vietnamese Shaken", 280, ""],
+      ["Classic Cold Coffee", 280, ""], ["Hazelnut Frappé", 300, ""], ["Mocha Frappé", 300, ""], ["Salted Caramel Frappé", 300, ""],
+      ["Affogato", 320, "Espresso poured over vanilla ice cream"]
+    ]},
+    { name: "Cold Brew", note: "100% arabica steeped in cold water for 18 hours.", items: [
+      ["Classic Cold Brew", 250, ""], ["Cold Brew Tonic", 280, ""], ["Orange Cold Brew", 280, ""], ["Cinnamon Apple Cold Brew", 280, ""]
+    ]},
+    { name: "Matcha", items: [
+      ["Matcha Latte", 300, ""], ["Iced Matcha Latte", 320, ""], ["Strawberry Iced Matcha Latte", 350, ""]
+    ]},
+    { name: "Tea", note: "Served in organic cotton potlis.", items: [
+      ["Fresh Ginger Mint Tea", 180, ""], ["Masala Tea", 200, ""], ["Earl Grey or English Breakfast", 225, "", "", ["Earl Grey", "English Breakfast"]],
+      ["Darjeeling Green Tea", 225, ""], ["Hibiscus Tea", 225, ""], ["Rose Chamomile", 250, ""],
+      ["Iced Tea", 250, "Lemon or peach", "", ["Lemon", "Peach"]], ["Hibiscus Iced Tea", 275, ""],
+      ["Hot Chocolate", 300, ""], ["Shakes", 300, "Chocolate or strawberry", "", ["Chocolate", "Strawberry"]]
+    ]},
+    { name: "Mocktails", items: [
+      ["Rejuvenate", 300, "Ginger, lime, honey"],
+      ["The Darios Diaries", 350, "Dragon fruit, blue curaçao, litchi, lime"],
+      ["Sip Me Around", 350, "Watermelon, elderflower, cucumber, lime"],
+      ["Full Moon", 350, "Pineapple juice, cranberry juice, elderflower, mint, lavender"],
+      ["Virgin Mojito", 350, "Mint leaves, lime, sugar, soda water, crushed ice"],
+      ["Blue Hawaiian", 350, "Pineapple juice, coconut cream, blue curaçao syrup, lemon juice"],
+      ["Zesty Mary", 350, "Tomato juice, lemon juice, tabasco, black pepper, black salt"],
+      ["Guava Mary", 350, "Guava juice, tomato juice, lemon juice, tabasco, black salt"],
+      ["Casa Colada", 350, "Pineapple, vanilla ice cream, coconut syrup"],
+      ["The Delicious Story", 350, "Fresh red apple, kale leaves, carrot, apple juice"]
+    ]},
+    { name: "Fresh Juices", items: [
+      ["Orange", 250, ""], ["Pineapple", 250, ""], ["Carrot and Ginger", 280, ""], ["Apple, Beetroot and Carrot", 280, ""]
+    ]},
+    { name: "Soft Drinks & Water", items: [
+      ["Mineral Water", 75, ""], ["Soda", 100, ""], ["Fresh Lime Soda", 180, ""], ["Aerated Beverages", 180, ""],
+      ["Red Bull", 250, ""], ["Perrier Sparkling Water", 320, ""]
+    ]}
+  ],
+  bar: [
+    { name: "Signatures", note: "New from the bar. Ask your server for prices.", items: [
+      ["Dolce far Niente", null, "The sweetness of doing nothing. Bacardi white rum, blueberry, cream cheese, vanilla"],
+      ["Seta Nera", null, "Black silk. Bombay Sapphire, Campari, vermouth rosso, orange peel, clarified chocolate milk"],
+      ["Il Peccatore", null, "The sinner. Dewar's 12, espresso, orange, salted caramel, chocolate, bitters"],
+      ["Sicilia Speziata", null, "Spiced Sicily. Tequila, white wine, dry vermouth, gooseberry, coriander, chilli, lime, clarified yoghurt"],
+      ["Estate Italiana", null, "Italian summer. Bacardi white rum, Campari, watermelon, mint, soda"],
+      ["Giardino di Palermo", null, "Garden of Palermo. Vodka, tomato, jalapeño, onion, basil, garlic"]
+    ]},
+    { name: "Cocktails", items: [
+      ["Tales of Enchantment", 650, "Gin, basil leaves, cucumber, honey, topped with ginger ale"],
+      ["The Sweet Surrender", 675, "Vodka, strawberry crush, fresh cream, wheat biscuit, strawberry ice cream"],
+      ["The Botanical", 675, "Gin, green and black olives, fresh rosemary and oregano, topped with tonic"],
+      ["Malena", 675, "White rum, dark rum, fresh orange, green chilli"],
+      ["Romeo Lane", 695, "Bourbon, elderflower, lime"],
+      ["The Life Ahead", 695, "Tequila, mango pulp, mango juice, jalapeño"],
+      ["Mr. Godfather", 695, "Bourbon, clarified milk, rose extract, lime"],
+      ["Scent of a Woman", 725, "Vodka, sparkling wine, lavender, peach"],
+      ["Ultimate Wake-Up Call", 725, "Vodka, Kahlúa, Baileys, espresso, fresh cream, mascarpone, vanilla ice cream"]
+    ]},
+    { name: "The Classics", items: [
+      ["Mai Tai", 500, "White and dark rum, triple sec, apricot brandy, orange juice"],
+      ["Caipiroska", 500, "Vodka, mint leaves, lime wedges, brown sugar, Sprite"],
+      ["Mojito", 500, "White rum, mint leaves, lime wedges, sugar syrup, soda"],
+      ["Bloody Mary", 500, "Vodka, tomato juice, lime juice, Worcestershire sauce, tabasco, seasoning"],
+      ["Sex on the Beach", 500, "Vodka, peach schnapps, orange and cranberry juice"],
+      ["Cosmopolitan", 500, "Vodka, triple sec, cranberry and lime juice"],
+      ["Whiskey Sour", 500, "Whiskey, sweet and sour mix"],
+      ["Sangria", 500, "Red or white", "", ["Red", "White"]],
+      ["Margarita", 525, "Tequila, triple sec, sweet and sour mix"],
+      ["Tequila Sunrise", 525, "Tequila, grenadine, orange juice"],
+      ["Knock Out LIIT", 600, "Vodka, tequila, white rum, triple sec, gin, splash of Coke"]
+    ]},
+    { name: "Dessert Shots & Shooters", items: [
+      ["Guilty as Charged", 550, "Vodka, dark chocolate sauce, Nutella, caramel"],
+      ["Venetian Vice", 550, "Rum, passion fruit, almond syrup"],
+      ["Lick Me 'Til…", 600, "Bourbon, Baileys and fresh cream"],
+      ["Kamikaze", 300, ""], ["B52", 500, ""], ["Jägerbomb", 600, ""]
+    ]},
+    { name: "Gelati al Liquore", items: [
+      ["Gelato al Caffè & Bailey's", 550, ""], ["Gelato Strawberry & Champagne", 550, ""], ["Gelato Butterscotch & Rum", 550, ""]
+    ]},
+    { name: "Single Malt", note: "Spirits are priced per measure.", items: [
+      ["Paul John Bold", 500, ""], ["Glenfiddich 12 years", 600, ""], ["Talisker 10 years", 600, ""],
+      ["Glenlivet 12 years", 625, ""], ["Laphroaig 10 years", 650, ""], ["Glenfiddich 15 years", 900, ""]
+    ]},
+    { name: "Blended Scotch", items: [
+      ["Black & White", 275, ""], ["JW Red Label", 300, ""], ["Teacher's Highland Cream", 300, ""], ["Ballantine's", 325, ""],
+      ["Teacher's 50", 325, ""], ["Chivas Regal 12 years", 450, ""], ["JW Black Label", 450, ""], ["Monkey Shoulder", 575, ""],
+      ["JW Double Black", 575, ""], ["Chivas Regal 18 years", 900, ""]
+    ]},
+    { name: "Whiskey", items: [
+      ["Jim Beam", 300, "American"], ["Jack Daniel's", 450, "American"], ["Jameson", 400, "Irish"],
+      ["Akashi", 500, "Japanese"], ["Hibiki", 1350, "Japanese"]
+    ]},
+    { name: "Vodka", items: [
+      ["Smirnoff", 225, ""], ["Absolut", 300, ""], ["Absolut Flavours", 300, ""], ["Grey Goose", 500, ""],
+      ["Belvedere", 500, ""], ["Cîroc", 525, ""], ["Beluga Silver", 600, ""]
+    ]},
+    { name: "Gin", items: [
+      ["Greater Than", 200, ""], ["Stranger & Sons", 275, ""], ["Gordon's", 300, ""], ["Jaisalmer", 300, ""],
+      ["Bombay Sapphire", 325, ""], ["Hapusa", 350, ""], ["Tanqueray", 425, ""], ["Hendrick's", 600, ""]
+    ]},
+    { name: "Rum", items: [
+      ["Old Monk", 180, ""], ["Bacardi Carta Blanca", 200, ""], ["Bacardi Limón", 200, ""], ["El Dorado", 700, ""]
+    ]},
+    { name: "Tequila", items: [
+      ["Camino Blanco", 350, ""], ["Jose Cuervo Silver", 400, ""], ["Patrón Silver", 700, ""]
+    ]},
+    { name: "Aperitif & Cognac", items: [
+      ["Martini", 300, "Bianco, extra dry or rosso", "", ["Bianco", "Extra dry", "Rosso"]], ["Hennessy VS", 550, ""]
+    ]},
+    { name: "Liqueurs", items: [
+      ["Sambuca", 350, ""], ["Baileys Irish Cream", 400, ""], ["Kahlúa", 400, ""], ["Absinthe 49", 500, ""], ["Jägermeister", 500, ""]
+    ]},
+    { name: "Beer & Alcopops", note: "Beers are 300 ml.", items: [
+      ["Kingfisher", 220, ""], ["Kingfisher Ultra", 300, ""], ["Budweiser", 325, ""], ["Heineken", 325, ""],
+      ["Corona", 475, ""], ["Hoegaarden", 475, ""], ["Bacardi Breezer", 300, "Assorted flavours"]
+    ]}
+  ]
+};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = n => n.toLocaleString("en-IN");
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const hasTag = (it, t) => (it[3] || "").split(" ").includes(t);
+const state = { tab: "italian", gf: false, q: "", picks: false };
+
+// Top five per tab, ranked. Drawn from recent Zomato reviews, Zomato's 4-star dish ratings,
+// and what magicpin, District and food guides name as favourites. [dish name, note]
+// A tab with no list (the bar, for now) shows no Bestsellers button.
+const PICKS = {
+  italian: [
+    ["Ravioli Kamarina", "The dish guests name most in recent reviews: homemade ravioli in a creamy tomato and rosemary sauce."],
+    ["Tiramisu", "The dessert guests mention most, and a house classic."],
+    ["Blueberry Cheesecake", "Rated 4 stars and up on Zomato, and a regular in guests' reviews."],
+    ["Melanzane Parmigiana", "Guests call it a must-try. Sicilian comfort food, served with garlic bread."],
+    ["Margherita", "The simplest test of a wood-fired oven, rated 4 stars and up on Zomato."]
+  ],
+  cafe: [
+    ["Avocado Toast", "The café's best-rated plate on Zomato: sourdough, cheese pâté and avocado over caramelised onions."],
+    ["Blueberry Pancakes", "Pancakes are the breakfast guests name alongside the avocado toast."],
+    ["Chocolate Smoothie Bowl", "The richer of the two smoothie bowls, a staple of the all-day breakfast."],
+    ["Butter Croissant", "Baked fresh daily. Best with a cappuccino."],
+    ["Massaro (Mushroom Melt)", "The house sandwich: sautéed mushrooms, balsamic and melted cheddar in a French loaf."]
+  ],
+  drinks: [
+    ["Full Moon", "The mocktail guests call a must-try: pineapple, cranberry, elderflower, mint and lavender."],
+    ["Cappuccino", "Guests single out the coffee. 100% arabica, pulled to order."],
+    ["Classic Cold Coffee", "One of the drinks guests order most."],
+    ["Virgin Mojito", "One of the drinks guests order most, and a crowd-pleaser."],
+    ["Guava Mary", "A spicy guava twist on the Bloody Mary that stays with you."]
+  ]
+};
+const TAB_NAMES = { italian: "Italian", cafe: "Café", drinks: "Drinks", bar: "Bar" };
+const LOVED = new Set(Object.values(PICKS).flat().map(p => p[0]));
+const findItem = (tab, name) => {
+  for (const sec of MENU[tab]) { const it = sec.items.find(i => i[0] === name); if (it) return [sec, it]; }
+  return [];
+};
+
+function renderPicks() {
+  const tab = state.tab, q = state.q.trim().toLowerCase();
+  const rows = PICKS[tab].map(([name, note], i) => {
+    const [sec, it] = findItem(tab, name);
+    if (!it || (q && ![name, note, it[2], sec.name].join(" ").toLowerCase().includes(q))) return "";
+    const tags = (hasTag(it, "gf") ? '<span class="tag gf" title="Gluten free">GF</span>' : "") + (hasTag(it, "v") ? '<span class="tag v" title="Vegan">VEGAN</span>' : "");
+    return `<div class="item pick"${cartAttrs(tab, sec, it)}><span class="rank">${i + 1}</span><h3>${esc(name)}${tags}</h3><div class="price">${fmt(it[1])}</div>`
+      + `<div class="from">${esc(sec.name)}</div><p>${esc(note)}</p>`
+      + `<button class="jump" data-sec="${slug(sec.name)}" data-name="${esc(name)}">See it on the menu</button></div>`;
+  }).join("");
+  $("#pages").innerHTML = rows
+    ? `<section class="sec" id="bestsellers"><div class="sec-head"><h2>${TAB_NAMES[tab]} bestsellers</h2></div><p class="picks-intro">The five guests order and rave about most, picked from recent reviews and dish ratings.</p>${rows}</section>`
+    : `<div class="empty">Nothing matches “${esc(state.q)}”. Try another word.</div>`;
+  $("#chips").innerHTML = "";
+  $("#gf-wrap").hidden = true;
+  document.documentElement.style.setProperty("--accent", TAB_COLOURS[tab]);
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  $("#picks").setAttribute("aria-pressed", "true");
+}
+
+// Cart ids look like "italian/pasta/ravioli-kamarina"
+const cartId = (tab, sec, name) => `${tab}/${slug(sec.name)}/${slug(name)}`;
+function cartAttrs(tab, sec, it) {
+  const [name, price, , , opts] = it;
+  let a = ` data-cart-id="${cartId(tab, sec, name)}" data-cart-name="${esc(name)}" data-cart-price="${price == null ? "" : price}"`;
+  if (opts && price != null) a += ` data-cart-variants="${esc(JSON.stringify(opts.map(label => ({ label, price }))))}"`;
+  return a;
+}
+function cartItem(id) {
+  const [tab, secSlug, nameSlug] = id.split("/");
+  const sec = (MENU[tab] || []).find(s => slug(s.name) === secSlug);
+  const it = sec && sec.items.find(i => slug(i[0]) === nameSlug);
+  if (!it) return null;
+  return { name: it[0], price: it[1], variants: it[4] ? it[4].map(label => ({ label, price: it[1] })) : null };
+}
+
+function itemHTML(it, tab, sec) {
+  const [name, price, desc] = it;
+  let marks = "";
+  if (LOVED.has(name)) marks += '<span class="loved">bestseller</span>';
+  if (hasTag(it, "gf")) marks += '<span class="tag gf" title="Gluten free">GF</span>';
+  if (hasTag(it, "v")) marks += '<span class="tag v" title="Vegan">VEGAN</span>';
+  const priceHTML = price == null ? '<div class="price ask">ask us</div>' : `<div class="price">${fmt(price)}</div>`;
+  return `<div class="item"${cartAttrs(tab, sec, it)}><h3>${esc(name)}${marks}</h3>${priceHTML}${desc ? `<p>${esc(desc)}</p>` : ""}</div>`;
+}
+
+function render() {
+  $("#picks").hidden = !PICKS[state.tab];
+  if (state.picks && PICKS[state.tab]) return renderPicks();
+  $("#picks").setAttribute("aria-pressed", "false");
+  const q = state.q.trim().toLowerCase();
+  const match = (...parts) => !q || parts.join(" ").toLowerCase().includes(q);
+  const gfOn = state.gf && state.tab !== "bar";
+  let html = "", chips = "";
+  for (const sec of MENU[state.tab]) {
+    const hits = sec.items.filter(it => match(it[0], it[2] || "", sec.name, sec.en || "") && (!gfOn || hasTag(it, "gf")));
+    if (!hits.length) continue;
+    const id = slug(sec.name);
+    chips += `<button class="chip" data-target="${id}">${esc(sec.name)}</button>`;
+    html += `<section class="sec" id="${id}"><div class="sec-head"><h2>${esc(sec.name)}</h2>${sec.en ? `<span class="en">(${esc(sec.en)})</span>` : ""}</div>`
+      + (sec.note ? `<p class="sec-note">${esc(sec.note)}</p>` : "")
+      + hits.map(it => itemHTML(it, state.tab, sec)).join("")
+      + (sec.extras && !gfOn ? `<div class="extras"><b>${esc(sec.extras[0])}</b><ul>${sec.extras[1].map(([n, p]) => `<li><span>${esc(n)}</span><span>${fmt(p)}</span></li>`).join("")}</ul></div>` : "")
+      + `</section>`;
+  }
+  if (!html) html = `<div class="empty">Nothing matches${q ? ` “${esc(state.q)}”` : ""}. Try another word.</div>`;
+  else if (state.tab !== "bar")
+    html = '<div class="legend"><span><span class="tag gf">GF</span>Gluten free</span><span><span class="tag v">VEGAN</span>Vegan</span><span class="loved">bestseller</span></div>' + html;
+  $("#pages").innerHTML = html;
+  $("#chips").innerHTML = chips;
+  $("#gf-wrap").hidden = state.tab === "bar";
+  document.documentElement.style.setProperty("--accent", TAB_COLOURS[state.tab]);
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === state.tab));
+  spy();
+}
+
+function spy() {
+  const secs = [...document.querySelectorAll("section.sec")];
+  const barH = document.querySelector(".bar").getBoundingClientRect().bottom + 10;
+  let cur = secs[0];
+  for (const s of secs) if (s.getBoundingClientRect().top <= barH) cur = s;
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) cur = secs[secs.length - 1];
+  const row = $("#chips");
+  row.querySelectorAll(".chip").forEach(c => {
+    const on = cur && c.dataset.target === cur.id;
+    // Scroll only the tab row sideways; scrollIntoView would also move the page and fight the reader
+    if (on && !c.classList.contains("on")) row.scrollTo({ left: c.offsetLeft - (row.clientWidth - c.offsetWidth) / 2 });
+    c.classList.toggle("on", on);
+  });
+}
+
+document.querySelector(".tabs").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.tab = b.dataset.tab; render();
+  window.scrollTo({ top: document.querySelector(".cover").offsetHeight, behavior: "auto" });
+  try { localStorage.setItem("darios-tab", state.tab); } catch (_) {}
+});
+$("#chips").addEventListener("click", e => {
+  const c = e.target.closest(".chip"); if (!c) return;
+  document.getElementById(c.dataset.target).scrollIntoView();
+});
+$("#picks").addEventListener("click", () => {
+  state.picks = !state.picks; render();
+  window.scrollTo({ top: document.querySelector(".cover").offsetHeight, behavior: "auto" });
+});
+// "See it on the menu" leaves the bestsellers view and scrolls to the dish
+$("#pages").addEventListener("click", e => {
+  const b = e.target.closest(".jump"); if (!b) return;
+  state.picks = false; state.q = ""; $("#q").value = ""; render();
+  const dish = [...document.querySelectorAll("#" + b.dataset.sec + " .item")].find(el => el.querySelector("h3").firstChild.textContent === b.dataset.name);
+  (dish || document.getElementById(b.dataset.sec)).scrollIntoView({ block: dish ? "center" : "start" });
+});
+$("#gf-only").addEventListener("change", e => { state.gf = e.target.checked; render(); });
+$("#q").addEventListener("input", e => { state.q = e.target.value; render(); });
+window.addEventListener("scroll", () => requestAnimationFrame(spy), { passive: true });
+
+try { const t = localStorage.getItem("darios-tab"); if (t && MENU[t]) state.tab = t; } catch (_) {}
+const hashTab = location.hash.slice(1);
+if (MENU[hashTab]) state.tab = hashTab;
+render();
+</script>
+<script src="../cart/cart.js" charset="utf-8"></script>
