@@ -10,6 +10,8 @@ window.MENU_CONFIG = {
   orderWebhookUrl: "",          // only used when firebase (below) isn't set
   soldOut: [],                  // dish names that can't be ordered today, e.g. ["Tiramisu"]
   menuSelector: "#pages",       // where the menu items are rendered
+  dailyCode: true,              // guests need today's 4-digit code (shown on the staff screen) to order
+  dailyCodeResetHour: 5,        // a new code is made automatically at 5 am each day
   getItem: id => cartItem(id),  // lets the cart re-check a saved order against today's menu
 
   // Orders are saved here, and the staff screen reads them. These values are meant to be public;

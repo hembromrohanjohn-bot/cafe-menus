@@ -111,3 +111,22 @@ body.has-new .top { background: var(--st-new); }
 .actions .cancel.confirm { border-color: var(--st-new); background: var(--st-new); color: #fff; }
 .actions button:disabled { opacity: .55; cursor: default; box-shadow: none; }
 .actions button:active:not(:disabled) { transform: scale(.98); }
+
+/* Today's code and the pause switch */
+.today {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap;
+  max-width: 1400px; margin: 20px auto 0; padding: 18px 24px; border-radius: 20px;
+  width: calc(100% - 44px); background: var(--st-card); box-shadow: inset 0 0 0 1.5px var(--st-gold), 0 8px 22px rgba(60, 35, 20, .08);
+}
+.today-code { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 18px; }
+.today-code small { grid-column: 1 / -1; font: 600 13px var(--st-font-strong); letter-spacing: .2em; text-transform: uppercase; color: var(--st-muted); }
+.today-code b { font: 600 52px/1 var(--st-font-strong); letter-spacing: .28em; color: var(--st-brand); font-variant-numeric: tabular-nums; }
+.today-code span { font: italic 15px/1.4 var(--st-font-soft); color: var(--st-muted); max-width: 30ch; }
+.today-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.today-btn { min-height: 50px; padding: 0 20px; border-radius: 14px; cursor: pointer; font: 600 16px var(--st-font-strong); letter-spacing: .1em; text-transform: uppercase; border: 1.5px solid var(--st-line); background: transparent; color: var(--st-ink); }
+.today-btn.confirm { border-color: var(--st-brand); background: var(--st-brand); color: var(--st-brand-ink); }
+.today-btn.pause { border-color: var(--st-new); color: var(--st-new); }
+.today-btn.pause[aria-pressed="true"] { border-color: var(--st-done); background: var(--st-done); color: #fff; }
+.banner.paused { background: var(--st-new); color: #fff; }
+body.is-paused .today { box-shadow: inset 0 0 0 2px var(--st-new), 0 8px 22px rgba(60, 35, 20, .08); }
+@media (max-width: 600px) { .today-code b { font-size: 42px; } .today-actions { width: 100%; } .today-btn { flex: 1; } }

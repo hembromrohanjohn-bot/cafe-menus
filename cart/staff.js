@@ -3,7 +3,7 @@
 const SDK = "https://www.gstatic.com/firebasejs/12.19.0/";
 const { initializeApp } = await import(SDK + "firebase-app.js");
 const { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } = await import(SDK + "firebase-auth.js");
-const { getFirestore, collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, serverTimestamp, Timestamp } = await import(SDK + "firebase-firestore.js");
+const { getFirestore, collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, setDoc, runTransaction, serverTimestamp, Timestamp } = await import(SDK + "firebase-firestore.js");
 
 const C = window.MENU_CONFIG;
 const app = initializeApp(C.firebase);
@@ -36,6 +36,14 @@ let firstSnapshot = true;
 let confirmCancel = null;  // order id waiting for a second tap on Cancel
 let busy = new Set();      // order ids with an update on its way
 
+// Today's code (staff-only) and the pause switch (guests' menus follow it)
+const accessRef = doc(db, "restaurants", C.restaurantId, "private", "access");
+const statusRef = doc(db, "restaurants", C.restaurantId, "public", "status");
+let access = null;         // { code, validUntil }
+let orderingPaused = false;
+let stopExtras = [];
+let confirmNewCode = false;
+
 document.title = `Orders · ${C.restaurantName}`;
 const brandName = $("#brand-name"); if (brandName) brandName.textContent = C.restaurantName;
 
@@ -48,7 +56,11 @@ onAuthStateChanged(auth, user => {
   $("#who").textContent = user ? "Signed in as " + username(user) : "";
   $("#signout").hidden = !user;
   if (stopListening) { stopListening(); stopListening = null; }
-  if (user) listen();
+  stopExtras.forEach(stop => stop());
+  stopExtras = [];
+  $("#today").hidden = !user;
+  $("#paused-banner").hidden = true;
+  if (user) { listen(); listenToday(); }
   else { orders = []; render(); }
 });
 
@@ -98,6 +110,92 @@ function listen() {
       : "Lost the connection to the order list. Reload the page.";
   });
 }
+
+/* ---------- Today's code and pausing ---------- */
+
+// Codes last until the next reset hour (5 am by default), so each day starts with a fresh one
+function nextReset() {
+  const hour = Number.isInteger(C.dailyCodeResetHour) ? C.dailyCodeResetHour : 5;
+  const d = new Date();
+  d.setHours(hour, 0, 0, 0);
+  if (d <= new Date()) d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
+function randomCode(avoid) {
+  const n = new Uint32Array(1);
+  let code;
+  do { crypto.getRandomValues(n); code = String(n[0] % 10000).padStart(4, "0"); } while (code === avoid);
+  return code;
+}
+const codeValid = a => a && a.validUntil && a.validUntil.toMillis() > Date.now() + 60e3;
+
+// Make a new code if there isn't a current one (or when staff ask for one). Done in a transaction,
+// so two tablets opening at the same moment agree on one code.
+async function ensureCode(force = false) {
+  if (C.dailyCode === false || !auth.currentUser) return;
+  try {
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(accessRef);
+      const current = snap.exists() ? snap.data() : null;
+      if (!force && codeValid(current)) return;
+      tx.set(accessRef, { code: randomCode(current?.code), validUntil: Timestamp.fromMillis(nextReset()), updatedAt: serverTimestamp(), updatedBy: auth.currentUser.email });
+    });
+  } catch (err) {
+    console.error("[staff] Couldn't set today's code:", err);
+    alertBar("Couldn't set today's code. Check the internet connection.");
+  }
+}
+
+function listenToday() {
+  if (C.dailyCode === false) $(".today-code").hidden = true;
+  stopExtras.push(onSnapshot(accessRef, snap => {
+    access = snap.exists() ? snap.data() : null;
+    paintToday();
+    if (!codeValid(access)) ensureCode();
+  }, err => console.error("[staff] Code:", err)));
+  stopExtras.push(onSnapshot(statusRef, snap => {
+    orderingPaused = snap.exists() && snap.get("orderingPaused") === true;
+    paintToday();
+  }, err => console.error("[staff] Pause switch:", err)));
+}
+
+function paintToday() {
+  const ok = codeValid(access);
+  $("#code").textContent = ok ? access.code : "····";
+  $("#code-until").textContent = ok
+    ? `Guests enter this once to order. Changes at ${clock(access.validUntil.toDate())}.`
+    : "Making today's code…";
+  $("#new-code").textContent = confirmNewCode ? "Tap again: guests will need the new code" : "New code";
+  $("#new-code").classList.toggle("confirm", confirmNewCode);
+  $("#pause").textContent = orderingPaused ? "Resume ordering" : "Pause ordering";
+  $("#pause").setAttribute("aria-pressed", String(orderingPaused));
+  $("#paused-banner").hidden = !orderingPaused;
+  document.body.classList.toggle("is-paused", orderingPaused);
+}
+
+$("#new-code").addEventListener("click", async () => {
+  if (!confirmNewCode) {
+    confirmNewCode = true;
+    paintToday();
+    setTimeout(() => { confirmNewCode = false; paintToday(); }, 4000);
+    return;
+  }
+  confirmNewCode = false;
+  paintToday();
+  await ensureCode(true);
+});
+
+$("#pause").addEventListener("click", async () => {
+  try {
+    await setDoc(statusRef, { orderingPaused: !orderingPaused, updatedAt: serverTimestamp(), updatedBy: auth.currentUser.email });
+  } catch (err) {
+    console.error("[staff] Couldn't change the pause switch:", err);
+    alertBar("Couldn't change ordering. Check the internet connection.");
+  }
+});
+
+// A tablet left on overnight gets the new code at the reset hour without anyone touching it
+setInterval(() => { if (auth.currentUser && !codeValid(access)) ensureCode(); }, 60000);
 
 async function setStatus(id, status) {
   if (busy.has(id)) return;

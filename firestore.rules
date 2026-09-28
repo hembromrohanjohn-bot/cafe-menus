@@ -19,11 +19,31 @@ service cloud.firestore {
         && request.auth.token.email in staffEmails()[rid];
     }
 
+    // Today's code lives in a staff-only document; guests never read it, the rules check it for them
+    function accessDoc(rid) {
+      return /databases/$(database)/documents/restaurants/$(rid)/private/access;
+    }
+    function statusDoc(rid) {
+      return /databases/$(database)/documents/restaurants/$(rid)/public/status;
+    }
+    function codeOk(rid, code) {
+      return exists(accessDoc(rid))
+        && get(accessDoc(rid)).data.code == code
+        && get(accessDoc(rid)).data.validUntil > request.time;
+    }
+    function orderingOpen(rid) {
+      return !(exists(statusDoc(rid)) && get(statusDoc(rid)).data.orderingPaused == true);
+    }
+
     match /restaurants/{rid}/orders/{orderId} {
-      // Guests: place a new order. Only well-formed orders for a known restaurant get in.
+      // Guests: place a new order. Only well-formed orders for a known restaurant, with today's code,
+      // while ordering isn't paused, get in.
       allow create: if rid in staffEmails()
-        && request.resource.data.keys().hasAll(['restaurant', 'table', 'items', 'notes', 'subtotal', 'serviceCharge', 'total', 'createdAt', 'placedAt', 'status'])
-        && request.resource.data.keys().hasOnly(['restaurant', 'table', 'items', 'notes', 'subtotal', 'serviceCharge', 'total', 'createdAt', 'placedAt', 'status'])
+        && orderingOpen(rid)
+        && request.resource.data.keys().hasAll(['restaurant', 'table', 'code', 'items', 'notes', 'subtotal', 'serviceCharge', 'total', 'createdAt', 'placedAt', 'status'])
+        && request.resource.data.keys().hasOnly(['restaurant', 'table', 'code', 'items', 'notes', 'subtotal', 'serviceCharge', 'total', 'createdAt', 'placedAt', 'status'])
+        && request.resource.data.code is string
+        && codeOk(rid, request.resource.data.code)
         && request.resource.data.restaurant == rid
         && request.resource.data.status == 'new'
         && request.resource.data.placedAt == request.time
@@ -55,6 +75,30 @@ service cloud.firestore {
         && request.resource.data.statusBy == request.auth.token.email;
 
       allow delete: if false;
+    }
+
+    // Today's code: staff only. It must be 4 digits and expire within 2 days.
+    match /restaurants/{rid}/private/access {
+      allow read: if isStaff(rid);
+      allow create, update: if isStaff(rid)
+        && request.resource.data.keys().hasOnly(['code', 'validUntil', 'updatedAt', 'updatedBy'])
+        && request.resource.data.code is string
+        && request.resource.data.code.matches('^[0-9]{4}$')
+        && request.resource.data.validUntil is timestamp
+        && request.resource.data.validUntil > request.time
+        && request.resource.data.validUntil < request.time + duration.value(2, 'd')
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.token.email;
+    }
+
+    // The pause switch: anyone can see it (so menus can show "ordering is paused"), only staff change it.
+    match /restaurants/{rid}/public/status {
+      allow get: if true;
+      allow create, update: if isStaff(rid)
+        && request.resource.data.keys().hasOnly(['orderingPaused', 'updatedAt', 'updatedBy'])
+        && request.resource.data.orderingPaused is bool
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.token.email;
     }
 
     // Everything else is closed.

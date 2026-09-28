@@ -164,3 +164,12 @@ html.cart-has-bar body { padding-bottom: calc(84px + env(safe-area-inset-bottom,
 .cart-track-cancel { margin: 14px 0 0; text-align: center; font-weight: 700; font-size: 17px; color: #8A1C0C; }
 .cart-track-link { display: block; margin: 10px 0 0; min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 14px; color: var(--cart-ink, #222); text-decoration: underline; text-underline-offset: 3px; text-align: left; }
 .cart-bar-status { font-variant-numeric: normal; }
+
+/* Today's code (asked with the table number when needed) and the pause switch */
+.cart-ask-field + .cart-ask-field:not([hidden]) { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--cart-line, #ddd); }
+#cart-code { letter-spacing: .5em; font-variant-numeric: tabular-nums; }
+#cart-code::placeholder { letter-spacing: 0; }
+.cart-paused-note { margin: 16px 0 0; padding: 12px 14px; border-radius: 12px; background: #FBE6E1; color: #8A1C0C; font-weight: 600; font-size: 15px; text-align: center; }
+.cart-bar-note { font-size: 13px; letter-spacing: .04em; text-transform: none; opacity: .9; }
+.cart-bar-note::after { content: none; }
+html.cart-paused .cart-bar-btn[data-cart-act="none"] { cursor: default; }

@@ -1,5 +1,6 @@
 // Firebase side of the cart: saves orders and watches their status. Loaded by cart.js only when
-// MENU_CONFIG.firebase is set. Orders live at restaurants/{restaurantId}/orders/{orderId}.
+// MENU_CONFIG.firebase is set. Orders live at restaurants/{restaurantId}/orders/{orderId};
+// the pause switch at restaurants/{restaurantId}/public/status. Today's code is staff-only and checked by the rules.
 const SDK = "https://www.gstatic.com/firebasejs/12.19.0/";
 const { initializeApp, getApps } = await import(SDK + "firebase-app.js");
 const { getFirestore, doc, collection, setDoc, getDocFromServer, onSnapshot, serverTimestamp } = await import(SDK + "firebase-firestore.js");
@@ -32,6 +33,13 @@ export async function saveOrder(config, id, order) {
     } catch (_) {}
     throw err;
   }
+}
+
+// Calls back with { paused } whenever staff pause or resume ordering; returns a function that stops watching
+export function watchOrdering(config, callback) {
+  return onSnapshot(doc(database(config), "restaurants", config.restaurantId, "public", "status"),
+    snap => callback({ paused: snap.exists() && snap.get("orderingPaused") === true }),
+    err => console.warn("[cart] Couldn't follow ordering status:", err));
 }
 
 // Calls back with { status, statusAt } every time staff update the order; returns a function that stops watching

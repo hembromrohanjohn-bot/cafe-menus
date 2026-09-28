@@ -17,6 +17,11 @@
  * sees live status as staff update it on the staff screen. Otherwise with orderWebhookUrl they're POSTed there,
  * and with neither they're only logged.
  *
+ * Today's code (Firebase only, MENU_CONFIG.dailyCode): staff get a 4-digit code on the staff screen each day;
+ * guests enter it once at checkout and it's remembered until the daily reset. The Firestore rules reject orders
+ * with a wrong or expired code, so a photo of a table's QR code can't be used to order from home.
+ * Staff can also pause ordering; the menu then stays browsable but can't take orders.
+ *
  * Menus that re-render their items (tabs, search, filters) are fine: a MutationObserver re-adds the
  * controls every time the item list changes. With orderingEnabled anything but true, this file does nothing.
  */
@@ -81,6 +86,43 @@
   }
   // Orders worth showing the guest: still in progress, or finished in the last few minutes
   const activeOrders = () => tracked.filter(o => !FINAL.includes(o.status) || Date.now() - (o.statusAt || o.at) < SHOW_FINAL_MS);
+
+  /* ---------- Today's code and the pause switch ---------- */
+
+  const codeRequired = () => !!C.firebase && C.dailyCode !== false;
+  const CODE_KEY = "code:" + (C.restaurantId || location.pathname);
+  // The code is remembered until the next daily reset (5 am by default), when staff get a new one
+  function nextReset() {
+    const hour = Number.isInteger(C.dailyCodeResetHour) ? C.dailyCodeResetHour : 5;
+    const d = new Date();
+    d.setHours(hour, 0, 0, 0);
+    if (d <= new Date()) d.setDate(d.getDate() + 1);
+    return d.getTime();
+  }
+  let dailyCode = null;
+  try {
+    const saved = JSON.parse(localStorage.getItem(CODE_KEY) || "null");
+    if (saved && /^\d{4}$/.test(saved.code) && Date.now() < saved.until) dailyCode = saved.code;
+  } catch (_) {}
+  function rememberCode(code) {
+    dailyCode = code;
+    try {
+      if (code) localStorage.setItem(CODE_KEY, JSON.stringify({ code, until: nextReset() }));
+      else localStorage.removeItem(CODE_KEY);
+    } catch (_) {}
+  }
+
+  let paused = false;
+  function watchPause() {
+    if (!C.firebase) return;
+    firebase().then(fb => fb.watchOrdering(C, ({ paused: p }) => {
+      if (p === paused) return;
+      paused = p;
+      doc.classList.toggle("cart-paused", paused);
+      live.textContent = paused ? "Ordering is paused. Please order with your server." : "Ordering is open again.";
+      refresh();
+    })).catch(err => console.warn("[cart] Couldn't load ordering status:", err));
+  }
 
   let fbModule = null;
   function firebase() {
@@ -204,12 +246,13 @@
 
   /* ---------- Placing an order ---------- */
 
-  // Add future fields (verification code) here; nothing else needs to change.
+  // Add future fields here; nothing else needs to change.
   function buildOrder() {
     const t = totals();
     return {
       restaurant: C.restaurantId,
       table,
+      ...(codeRequired() ? { code: dailyCode } : {}),
       items: lines.map(l => ({ id: l.id, name: l.name, variant: l.variant, qty: l.qty, unitPrice: l.unitPrice, lineTotal: l.unitPrice * l.qty })),
       notes: notes.trim(),
       subtotal: t.subtotal,
@@ -277,6 +320,7 @@
     + `<button type="button" data-cart-act="inc" data-key="${esc(key)}" aria-label="One more ${esc(name)}"${qty >= MAX_QTY ? " disabled" : ""}>+</button></div>`;
 
   function controlHTML(it) {
+    if (paused) return "";
     if (!it.variants && !Number.isFinite(it.price)) return "";
     if (isSoldOut(it.id, it.name)) return '<span class="cart-soldout">Sold out</span>';
     if (it.variants) {
@@ -316,8 +360,8 @@
   let view = "review";   // "review" | "choose" | "sent" | "status"
   let sentId = null;
   let chooseItem = null, sending = false, error = "", opener = null;
-  let askTable = false, tableError = "";
-  let whereEl, askEl, askInput, askErrEl;
+  let asking = false, tableError = "", codeError = "";
+  let whereEl, askEl, askTableEl, askInput, askErrEl, askCodeEl, codeInput, codeErrEl, pausedEl;
 
   function build() {
     live = document.createElement("div");
@@ -348,6 +392,14 @@
 
   function paintBar() {
     const t = totals(), active = activeOrders();
+    if (paused && t.count === 0 && !active.length) {
+      // Nothing to show but the pause: say so, so guests know to ask their server
+      doc.classList.add("cart-has-bar");
+      bar.hidden = !sheet.hidden;
+      barBtn.dataset.cartAct = "none";
+      paint(barBtn, '<span class="cart-bar-count">Ordering is paused</span><span class="cart-bar-cta cart-bar-note">Please order with your server</span>');
+      return;
+    }
     const show = t.count > 0 || active.length > 0;
     doc.classList.toggle("cart-has-bar", show);
     bar.hidden = !show || !sheet.hidden;
@@ -422,15 +474,26 @@
         + '<div class="cart-notes"><label for="cart-notes">Notes for the kitchen <span>(optional)</span></label>'
         + '<textarea id="cart-notes" rows="2" maxlength="300" placeholder="For example: less spicy, no onion"></textarea></div>'
         + '<div class="cart-sum"></div>'
-        + '<div class="cart-ask" hidden><label for="cart-table">Your table number</label>'
+        + '<p class="cart-paused-note" hidden>Ordering is paused right now. Please order with your server.</p>'
+        + '<div class="cart-ask" hidden>'
+        + '<div class="cart-ask-field" data-field="table"><label for="cart-table">Your table number</label>'
         + '<input id="cart-table" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10" placeholder="For example: 12" aria-describedby="cart-table-hint cart-table-err">'
         + '<p id="cart-table-hint" class="cart-ask-hint">You’ll find it on the QR code on your table.</p>'
-        + '<p id="cart-table-err" class="cart-ask-err" role="alert"></p></div>';
+        + '<p id="cart-table-err" class="cart-ask-err" role="alert"></p></div>'
+        + '<div class="cart-ask-field" data-field="code"><label for="cart-code">Today’s code</label>'
+        + '<input id="cart-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="4 digits" aria-describedby="cart-code-hint cart-code-err">'
+        + '<p id="cart-code-hint" class="cart-ask-hint">Ask your server for today’s code, or check the card at your table. You only need it once per visit.</p>'
+        + '<p id="cart-code-err" class="cart-ask-err" role="alert"></p></div></div>';
       whereEl = bodyEl.querySelector(".cart-where");
+      pausedEl = bodyEl.querySelector(".cart-paused-note");
       askEl = bodyEl.querySelector(".cart-ask");
-      askInput = askEl.querySelector("input");
-      askErrEl = askEl.querySelector(".cart-ask-err");
-      askInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); place(); } });
+      askTableEl = askEl.querySelector('[data-field="table"]');
+      askInput = askTableEl.querySelector("input");
+      askErrEl = askTableEl.querySelector(".cart-ask-err");
+      askCodeEl = askEl.querySelector('[data-field="code"]');
+      codeInput = askCodeEl.querySelector("input");
+      codeErrEl = askCodeEl.querySelector(".cart-ask-err");
+      [askInput, codeInput].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); place(); } }));
       linesEl = bodyEl.querySelector(".cart-lines");
       sumEl = bodyEl.querySelector(".cart-sum");
       notesEl = bodyEl.querySelector("textarea");
@@ -441,9 +504,15 @@
     const active = activeOrders();
     paint(whereEl, (table ? `<p class="cart-table-pill">Table ${esc(table)}</p>` : "")
       + (active.length ? `<button type="button" class="cart-track-link" data-cart-act="status">Earlier order #${esc(active[0].code)}: ${esc(STATUS[active[0].status].label)}. Track it</button>` : ""));
-    askEl.hidden = !(askTable && !table && lines.length);
+    const needTable = !table, needCode = codeRequired() && !dailyCode;
+    askEl.hidden = !(asking && (needTable || needCode) && lines.length && !paused);
+    askTableEl.hidden = !needTable;
+    askCodeEl.hidden = !needCode;
     askErrEl.textContent = tableError;
+    codeErrEl.textContent = codeError;
     askInput.setAttribute("aria-invalid", tableError ? "true" : "false");
+    codeInput.setAttribute("aria-invalid", codeError ? "true" : "false");
+    pausedEl.hidden = !paused || !lines.length;
     bodyEl.querySelector(".cart-notes").hidden = !lines.length;
     paint(linesEl, lines.length ? lines.map(lineHTML).join("") : '<p class="cart-empty">Your order is empty. Tap “+ Add” on anything you’d like.</p>');
     paint(sumEl, lines.length
@@ -453,7 +522,7 @@
         + '<p class="cart-fine">Taxes apply. Your final bill comes from the restaurant.</p>'
       : "");
     paint(footEl, (error ? `<p class="cart-error" role="alert">${esc(error)}</p>` : "")
-      + `<button type="button" class="cart-primary" data-cart-act="place"${!lines.length || sending ? " disabled" : ""}>${sending ? "Sending…" : lines.length ? `Place order · ${money(t.total)}` : "Place order"}</button>`);
+      + `<button type="button" class="cart-primary" data-cart-act="place"${!lines.length || sending || paused ? " disabled" : ""}>${sending ? "Sending…" : paused ? "Ordering is paused" : lines.length ? `Place order · ${money(t.total)}` : "Place order"}</button>`);
   }
 
   function openSheet(nextView, from) {
@@ -479,30 +548,37 @@
     if (back) back.focus();
   }
 
+  function focusAsk() {
+    refresh();
+    askEl.scrollIntoView({ block: "nearest" });
+    const first = [[askTableEl, askInput], [askCodeEl, codeInput]].find(([el, input]) => !el.hidden && (!input.value.trim() || input.getAttribute("aria-invalid") === "true"))
+      || [[askTableEl, askInput], [askCodeEl, codeInput]].find(([el]) => !el.hidden);
+    if (first) first[1].focus();
+  }
+
   async function place() {
-    if (sending || !lines.length) return;
-    if (!table) {
-      // No table in the link: ask for it here rather than blocking browsing
-      if (!askTable) {
-        askTable = true;
-        tableError = "";
-        refresh();
-        askEl.scrollIntoView({ block: "nearest" });
-        askInput.focus();
+    if (sending || !lines.length || paused) return;
+    const needTable = !table, needCode = codeRequired() && !dailyCode;
+    if (needTable || needCode) {
+      // Missing the table (no table in the link) or today's code: ask here rather than blocking browsing
+      if (!asking) {
+        asking = true;
+        tableError = codeError = "";
+        focusAsk();
         return;
       }
-      const t = cleanTable(askInput.value);
-      if (!t) {
-        tableError = askInput.value.trim()
-          ? "That doesn’t look like a table number. Use the one on the QR code, like 12 or T12."
-          : "Please enter your table number to place the order.";
-        refresh();
-        askInput.focus();
-        return;
-      }
-      tableError = "";
-      askTable = false;
-      setTable(t);
+      const t = needTable ? cleanTable(askInput.value) : table;
+      const code = needCode ? codeInput.value.replace(/\D/g, "") : dailyCode;
+      tableError = needTable && !t
+        ? (askInput.value.trim() ? "That doesn’t look like a table number. Use the one on the QR code, like 12 or T12." : "Please enter your table number to place the order.")
+        : "";
+      codeError = needCode && !/^\d{4}$/.test(code)
+        ? (codeInput.value.trim() ? "Today’s code is 4 digits." : "Please enter today’s code. Your server can tell you.")
+        : "";
+      if (tableError || codeError) { focusAsk(); return; }
+      asking = false;
+      if (needTable) setTable(t);
+      if (needCode) rememberCode(code);
     }
     sending = true;
     error = "";
@@ -525,7 +601,20 @@
       bodyEl.innerHTML = "";
     } catch (err) {
       console.error("[cart] Order was not sent:", err);
-      error = "We couldn't send your order. Check your connection and try again, or ask your server. Your order is still here.";
+      if (err && err.code === "permission-denied" && codeRequired() && !paused) {
+        // Firebase refused it: the code is wrong or has changed since this phone saved it
+        rememberCode(null);
+        codeInput.value = "";
+        codeError = "That code didn’t work. It may have changed. Please check today’s code with your server.";
+        asking = true;
+        error = "";
+        sending = false;
+        focusAsk();
+        return;
+      }
+      error = paused
+        ? "Ordering was paused just now. Please order with your server. Your order is still here."
+        : "We couldn't send your order. Check your connection and try again, or ask your server. Your order is still here.";
     }
     sending = false;
     refresh();
@@ -609,6 +698,7 @@
     build();
     paintTable();
     watchTracked();
+    watchPause();
     doc.classList.add("cart-on");
     document.addEventListener("click", onClick);
     document.addEventListener("keydown", onKey);
