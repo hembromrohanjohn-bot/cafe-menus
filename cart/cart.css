@@ -210,3 +210,12 @@ html.cart-paused .cart-bar-btn[data-cart-act="none"] { cursor: default; }
 .cart-shake { animation: cart-shake .4s ease-in-out; }
 @keyframes cart-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 @media (prefers-reduced-motion: reduce) { .cart-gate, .cart-shake { animation: none; } }
+
+/* Add-ons on a cart line (e.g. pizza toppings) */
+.cart-line-extras { display: block; margin-top: 2px; font-family: var(--cart-font, inherit); font-weight: 600; font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--cart-accent, #222); }
+.cart-extras-btn {
+  grid-column: 1 / -1; justify-self: start; min-height: 44px; padding: 0 16px; border-radius: 999px; cursor: pointer;
+  border: 1.5px dashed var(--cart-accent, #222); background: transparent; color: var(--cart-accent, #222);
+  font-family: var(--cart-font-strong, inherit); font-weight: 600; font-size: 14px; letter-spacing: .08em; text-transform: uppercase;
+}
+.cart-add.is-on { background: var(--cart-accent, #222); color: var(--cart-accent-ink, #fff); }

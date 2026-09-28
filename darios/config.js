@@ -13,6 +13,8 @@ window.MENU_CONFIG = {
   dailyCode: true,              // guests need today's 4-digit code (shown on the staff screen) to order
   dailyCodeResetHour: 5,        // a new code is made automatically at 5 am each day
   getItem: id => cartItem(id),  // lets the cart re-check a saved order against today's menu
+  getExtras: id => cartExtras(id),  // pizzas get "Add toppings" in the cart (the list under Pizza)
+  extrasLabel: "toppings",
 
   // Orders are saved here, and the staff screen reads them. These values are meant to be public;
   // the Firestore security rules decide who can read and change orders.

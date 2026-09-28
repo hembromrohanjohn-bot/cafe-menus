@@ -8,6 +8,9 @@
  *      An item with an empty data-cart-price and no variants can't be ordered (e.g. "ask your server").
  *   3. Loads cart.css and this file.
  *   4. Optionally has an element with a data-cart-table attribute (kept hidden) where "Table 12" is shown.
+ *   5. Optionally offers add-ons in the cart (e.g. pizza toppings): MENU_CONFIG.getExtras(itemId) returns
+ *      [{ id, name, price }] for items that take them, and MENU_CONFIG.extrasLabel names them ("toppings").
+ *      Add-ons belong to a cart line and apply to each unit in it.
  *
  * The table comes from the link, e.g. .../darios/?table=12 (numbers or short codes like T12 or B3).
  * Each table gets its own saved cart. With no table in the link guests can still browse and build an
@@ -41,6 +44,14 @@
   const money = n => (C.currency || "₹") + Math.round(n).toLocaleString(C.locale || "en-IN");
   const lineKey = (id, variant) => (variant ? id + "|" + variant : id);
   const isSoldOut = (id, name) => soldOut.has(id) || soldOut.has(name);
+
+  // Add-ons offered in the cart for an item, or null
+  function extrasFor(id) {
+    if (typeof C.getExtras !== "function") return null;
+    try { const list = C.getExtras(id); return Array.isArray(list) && list.length ? list : null; } catch (_) { return null; }
+  }
+  const EXTRAS = C.extrasLabel || "extras";
+  const eachPrice = l => l.unitPrice + (l.extras || []).reduce((s, e) => s + e.price, 0);
 
   /* ---------- Table ---------- */
 
@@ -283,6 +294,7 @@
       }
     } catch (_) { /* storage blocked or unreadable: start with an empty cart */ }
     lines = lines.filter(l => l && typeof l.id === "string" && Number.isInteger(l.qty) && l.qty > 0 && Number.isFinite(l.unitPrice));
+    lines.forEach(l => { l.extras = Array.isArray(l.extras) ? l.extras.filter(e => e && typeof e.id === "string" && Number.isFinite(e.price)) : []; });
     // When the page can look items up, drop saved lines that left the menu or sold out, and use today's names and prices
     if (typeof C.getItem === "function") {
       lines = lines.filter(l => {
@@ -297,6 +309,9 @@
         }
         if (!Number.isFinite(price)) return false;
         Object.assign(l, { key: lineKey(l.id, l.variant), name: item.name, unitPrice: price, qty: Math.min(l.qty, MAX_QTY) });
+        // Keep only add-ons still offered, at today's prices
+        const offered = extrasFor(l.id) || [];
+        l.extras = l.extras.map(e => offered.find(o => o.id === e.id)).filter(Boolean).map(o => ({ id: o.id, name: o.name, price: o.price }));
         return true;
       });
     }
@@ -347,7 +362,7 @@
     qty = Math.max(0, Math.min(MAX_QTY, qty));
     const i = lines.findIndex(l => l.key === key);
     if (i === -1) {
-      if (qty > 0 && item) lines.push({ key, id: item.id, name: item.name, variant: item.variant || null, unitPrice: item.price, qty });
+      if (qty > 0 && item) lines.push({ key, id: item.id, name: item.name, variant: item.variant || null, unitPrice: item.price, qty, extras: [] });
     } else if (qty === 0) lines.splice(i, 1);
     else lines[i].qty = qty;
     save();
@@ -358,7 +373,7 @@
   const countForItem = id => lines.reduce((n, l) => n + (l.id === id ? l.qty : 0), 0);
 
   function totals() {
-    const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+    const subtotal = lines.reduce((s, l) => s + eachPrice(l) * l.qty, 0);
     const serviceCharge = Math.round(subtotal * servicePct / 100);
     return { count: lines.reduce((n, l) => n + l.qty, 0), subtotal, serviceCharge, total: subtotal + serviceCharge };
   }
@@ -372,7 +387,9 @@
       restaurant: C.restaurantId,
       table,
       ...(codeRequired() ? { code: dailyCode } : {}),
-      items: lines.map(l => ({ id: l.id, name: l.name, variant: l.variant, qty: l.qty, unitPrice: l.unitPrice, lineTotal: l.unitPrice * l.qty })),
+      // unitPrice includes the line's add-ons; extras lists them for the kitchen
+      items: lines.map(l => ({ id: l.id, name: l.name, variant: l.variant, extras: (l.extras || []).map(e => ({ name: e.name, price: e.price })),
+        qty: l.qty, unitPrice: eachPrice(l), lineTotal: eachPrice(l) * l.qty })),
       notes: notes.trim(),
       subtotal: t.subtotal,
       serviceCharge: t.serviceCharge,
@@ -476,7 +493,8 @@
   /* ---------- Floating bar and order sheet ---------- */
 
   let bar, barBtn, sheet, panel, titleEl, bodyEl, footEl, linesEl, sumEl, notesEl, live;
-  let view = "review";   // "review" | "choose" | "sent" | "status"
+  let view = "review";   // "review" | "choose" | "extras" | "sent" | "status"
+  let extrasKey = null;  // the cart line whose add-ons are being chosen
   let sentId = null;
   let chooseItem = null, sending = false, error = "", opener = null;
   let whereEl, pausedEl;
@@ -545,11 +563,16 @@
   }
 
   function lineHTML(l) {
-    return `<div class="cart-line"><div class="cart-line-name">${esc(l.name)}${l.variant ? `<span class="cart-line-variant">${esc(l.variant)}</span>` : ""}</div>`
-      + `<div class="cart-line-total">${money(l.unitPrice * l.qty)}</div>`
+    const ex = l.extras || [], offered = extrasFor(l.id);
+    return `<div class="cart-line"><div class="cart-line-name">${esc(l.name)}${l.variant ? `<span class="cart-line-variant">${esc(l.variant)}</span>` : ""}`
+      + (ex.length ? `<span class="cart-line-extras">+ ${esc(ex.map(e => e.name).join(", "))}</span>` : "") + "</div>"
+      + `<div class="cart-line-total">${money(eachPrice(l) * l.qty)}</div>`
       + `<div class="cart-line-actions">${stepperHTML(l.key, l.qty, l.variant ? `${l.name} (${l.variant})` : l.name)}`
-      + `<span class="cart-line-each">${money(l.unitPrice)} each</span>`
-      + `<button type="button" class="cart-remove" data-cart-act="remove" data-key="${esc(l.key)}" aria-label="Remove ${esc(l.name)}${l.variant ? ` (${esc(l.variant)})` : ""}">Remove</button></div></div>`;
+      + `<span class="cart-line-each">${money(eachPrice(l))} each</span>`
+      + `<button type="button" class="cart-remove" data-cart-act="remove" data-key="${esc(l.key)}" aria-label="Remove ${esc(l.name)}${l.variant ? ` (${esc(l.variant)})` : ""}">Remove</button></div>`
+      + (offered ? `<button type="button" class="cart-extras-btn" data-cart-act="extras" data-key="${esc(l.key)}" aria-haspopup="dialog">`
+        + (ex.length ? `Change ${esc(EXTRAS)} (${ex.length})` : `+ Add ${esc(EXTRAS)}`) + "</button>" : "")
+      + "</div>";
   }
 
   function paintSheet() {
@@ -566,6 +589,21 @@
         }).join(""));
       paint(footEl, '<button type="button" class="cart-primary" data-cart-act="close">Done</button>');
       return;
+    }
+    if (view === "extras") {
+      const l = lines.find(x => x.key === extrasKey), offered = l && extrasFor(l.id);
+      if (l && offered) {
+        const on = id => (l.extras || []).some(e => e.id === id);
+        titleEl.textContent = `${EXTRAS.charAt(0).toUpperCase() + EXTRAS.slice(1)} for ${l.name}`;
+        paint(bodyEl, `<p class="cart-hint">Tap to add or remove.${l.qty > 1 ? ` They’re added to each of the ${l.qty} ${esc(l.name)} in this line.` : ""}</p>`
+          + offered.map(o => `<div class="cart-option"><span class="cart-option-name">${esc(o.name)}</span><span class="cart-option-price">+${money(o.price)}</span>`
+            + `<button type="button" class="cart-add${on(o.id) ? " is-on" : ""}" data-cart-act="toggle-extra" data-id="${esc(o.id)}" aria-pressed="${on(o.id)}" aria-label="${esc(o.name)}">${on(o.id) ? "✓ Added" : "+ Add"}</button></div>`).join(""));
+        paint(footEl, `<button type="button" class="cart-primary" data-cart-act="extras-done">Done · ${money(eachPrice(l))} each</button>`);
+        return;
+      }
+      view = "review";   // the line was removed: back to the order
+      painted.delete(bodyEl);
+      bodyEl.innerHTML = "";
     }
     if (view === "sent") {
       titleEl.textContent = "Order sent!";
@@ -616,6 +654,15 @@
       : "");
     paint(footEl, (error ? `<p class="cart-error" role="alert">${esc(error)}</p>` : "")
       + `<button type="button" class="cart-primary" data-cart-act="place"${!lines.length || sending || paused ? " disabled" : ""}>${sending ? "Sending…" : paused ? "Ordering is paused" : lines.length ? `Place order · ${money(t.total)}` : "Place order"}</button>`);
+  }
+
+  // Switch what the open sheet shows (e.g. the order, or one line's add-ons)
+  function showView(next) {
+    view = next;
+    painted.delete(bodyEl);
+    bodyEl.innerHTML = "";
+    refresh();
+    titleEl.focus();
   }
 
   function openSheet(nextView, from) {
@@ -747,6 +794,21 @@
       place();
     } else if (act === "gate-skip") {
       skipGate();
+    } else if (act === "extras") {
+      extrasKey = key;
+      showView("extras");
+    } else if (act === "toggle-extra") {
+      const l = lines.find(x => x.key === extrasKey), o = l && (extrasFor(l.id) || []).find(e => e.id === b.dataset.id);
+      if (!o) return;
+      const has = l.extras.some(e => e.id === o.id);
+      l.extras = has ? l.extras.filter(e => e.id !== o.id) : [...l.extras, { id: o.id, name: o.name, price: o.price }];
+      pendingId = null;
+      save();
+      refresh();
+      live.textContent = `${o.name} ${has ? "removed" : "added"}.`;
+      bodyEl.querySelector(`[data-cart-act="toggle-extra"][data-id="${CSS.escape(o.id)}"]`)?.focus();
+    } else if (act === "extras-done") {
+      showView("review");
     }
   }
 

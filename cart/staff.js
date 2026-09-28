@@ -244,7 +244,7 @@ function cardHTML(o) {
   return `<article class="order" data-status="${esc(o.status)}" data-id="${esc(o.id)}">`
     + `<header><div class="table"><small>Table</small><b>${esc(o.table || "?")}</b></div><div class="meta"><span class="code">#${esc(o.id.slice(0, 4).toUpperCase())}</span>`
     + `<span class="time${waiting ? " late" : ""}" title="${esc(new Date(placed).toLocaleString())}">${clock(new Date(placed))} · ${ago(placed)}</span></div></header>`
-    + `<ul class="items">${(o.items || []).map(i => `<li><span class="qty">${esc(i.qty)}×</span><span>${esc(i.name)}${i.variant ? `<em>${esc(i.variant)}</em>` : ""}</span></li>`).join("")}</ul>`
+    + `<ul class="items">${(o.items || []).map(i => `<li><span class="qty">${esc(i.qty)}×</span><span>${esc(i.name)}${i.variant ? `<em>${esc(i.variant)}</em>` : ""}${i.extras?.length ? `<strong class="extras">+ ${esc(i.extras.map(e => e.name).join(", "))}</strong>` : ""}</span></li>`).join("")}</ul>`
     + (o.notes ? `<p class="notes"><b>Note</b>${esc(o.notes)}</p>` : "")
     + `<footer><span class="total">${money(o.total)}</span><span class="state">${esc(f.label)}</span></footer>`
     + (actions ? `<div class="actions">${actions}</div>` : "")
