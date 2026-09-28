@@ -5,8 +5,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courgette&family=Antonio:wght@200;400;600&family=Archivo:wght@500;700&family=Lora:ital,wght@0,400;1,400&display=swap">
-<link rel="stylesheet" href="../cart/cart.css?v=20260928c">
-<script src="config.js?v=20260928c"></script>
+<link rel="stylesheet" href="../cart/cart.css?v=20260928d">
+<script src="config.js?v=20260928d"></script>
 <style>
   :root {
     color-scheme: light;
@@ -92,8 +92,15 @@
   .extras { margin-top: 16px; border: 1.5px solid var(--brick); background: #FFF9E8; }
   .extras b { display: block; background: var(--brick); color: var(--cream); padding: 7px 12px; font-family: var(--cond); font-weight: 600; font-size: 14px; letter-spacing: .1em; text-transform: uppercase; }
   .extras ul { list-style: none; margin: 0; padding: 6px 12px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 0 18px; }
-  .extras li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 13.5px; border-bottom: 1px dotted var(--line); }
-  .extras li span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .extras li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; font-size: 13.5px; border-bottom: 1px dotted var(--line); }
+  .extras li > span:nth-child(2) { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .extras-note { display: none; margin: 0; padding: 8px 12px 0; font-family: var(--serif); font-style: italic; font-size: 13.5px; color: var(--ink-soft); }
+  /* With ordering on, each topping gets an Add control after its price */
+  .cart-on .extras-note { display: block; }
+  .cart-on .extras ul { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+  .cart-on .extras li { padding: 6px 0; font-size: 14.5px; }
+  .cart-on .extras li > span:first-child { flex: 1; }
+  .extras .cart-ctl .cart-add { min-width: 72px; padding: 0 12px; font-size: 13.5px; }
   .picks-btn { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--gold); background: var(--mustard); color: var(--plum-deep); cursor: pointer; padding: 6px 14px; min-height: 36px; border-radius: 999px; font-family: var(--cond); font-weight: 600; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
   .picks-btn[aria-pressed="true"] { background: var(--plum); border-color: var(--plum); color: var(--mustard); }
   .picks-intro { margin: 8px 0 4px; font-family: var(--serif); font-style: italic; font-size: 14.5px; line-height: 1.5; color: var(--ink-soft); max-width: 52ch; }
@@ -231,9 +238,10 @@ const MENU = {
       ["Rigatoni alla Norma", 680, "Tomato sauce, aubergine and ricotta cheese", ""]
     ]},
     { name: "Pizza", extras: ["Extra toppings", [
-        ["Assorted vegetables", 120], ["Sun-dried tomatoes, artichokes or asparagus", 80], ["Olives or jalapeño", 90],
-        ["Mushrooms", 75], ["Broccoli", 80], ["Parmesan (grated) or sun-dried tomato pâté", 100],
-        ["Parmesan (shavings)", 110], ["Capers", 145], ["Extra virgin olive oil", 120], ["Truffle oil", 220]
+        ["Mushrooms", 75], ["Sun-dried tomatoes", 80], ["Artichokes", 80], ["Asparagus", 80], ["Broccoli", 80],
+        ["Olives", 90], ["Jalapeño", 90], ["Parmesan (grated)", 100], ["Sun-dried tomato pâté", 100],
+        ["Parmesan (shavings)", 110], ["Assorted vegetables", 120], ["Extra virgin olive oil", 120],
+        ["Capers", 145], ["Truffle oil", 220]
       ]], items: [
       ["Margherita", 650, "Fresh tomato sauce, mozzarella cheese and basil", ""],
       ["Bellassai", 650, "Fresh tomato sauce, mozzarella cheese and onion", ""],
@@ -550,9 +558,23 @@ function cartAttrs(tab, sec, it) {
 function cartItem(id) {
   const [tab, secSlug, nameSlug] = id.split("/");
   const sec = (MENU[tab] || []).find(s => slug(s.name) === secSlug);
+  // Extras (e.g. pizza toppings) have ids like "italian/pizza/extra-mushrooms"
+  const extra = sec && sec.extras && sec.extras[1].find(([n]) => "extra-" + slug(n) === nameSlug);
+  if (extra) return { name: extraName(sec, extra[0]), price: extra[1], variants: null };
   const it = sec && sec.items.find(i => slug(i[0]) === nameSlug);
   if (!it) return null;
   return { name: it[0], price: it[1], variants: it[4] ? it[4].map(label => ({ label, price: it[1] })) : null };
+}
+
+// Extras are ordered as their own lines, named so the kitchen knows what they are: "Extra topping: Mushrooms"
+const extraName = (sec, name) => sec.extras[0].replace(/s$/, "") + ": " + name;
+function extrasHTML(tab, sec) {
+  const [title, list] = sec.extras;
+  return `<div class="extras"><b>${esc(title)}</b>`
+    + `<p class="extras-note">Add toppings here, then tell the kitchen which pizza they’re for in your order notes.</p><ul>`
+    + list.map(([n, p]) => `<li data-cart-id="${tab}/${slug(sec.name)}/extra-${slug(n)}" data-cart-name="${esc(extraName(sec, n))}" data-cart-price="${p}">`
+      + `<span>${esc(n)}</span><span>${fmt(p)}</span></li>`).join("")
+    + "</ul></div>";
 }
 
 function itemHTML(it, tab, sec) {
@@ -581,7 +603,7 @@ function render() {
     html += `<section class="sec" id="${id}"><div class="sec-head"><h2>${esc(sec.name)}</h2>${sec.en ? `<span class="en">(${esc(sec.en)})</span>` : ""}</div>`
       + (sec.note ? `<p class="sec-note">${esc(sec.note)}</p>` : "")
       + hits.map(it => itemHTML(it, state.tab, sec)).join("")
-      + (sec.extras && !gfOn ? `<div class="extras"><b>${esc(sec.extras[0])}</b><ul>${sec.extras[1].map(([n, p]) => `<li><span>${esc(n)}</span><span>${fmt(p)}</span></li>`).join("")}</ul></div>` : "")
+      + (sec.extras && !gfOn ? extrasHTML(state.tab, sec) : "")
       + `</section>`;
   }
   if (!html) html = `<div class="empty">Nothing matches${q ? ` “${esc(state.q)}”` : ""}. Try another word.</div>`;
@@ -640,4 +662,4 @@ const hashTab = location.hash.slice(1);
 if (MENU[hashTab]) state.tab = hashTab;
 render();
 </script>
-<script src="../cart/cart.js?v=20260928c" charset="utf-8"></script>
+<script src="../cart/cart.js?v=20260928d" charset="utf-8"></script>
