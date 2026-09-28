@@ -35,6 +35,18 @@ export async function saveOrder(config, id, order) {
   }
 }
 
+// Is this today's code? The rules allow reading restaurants/{id}/codecheck/{code} only for the right code.
+// Resolves true or false; throws only if the check couldn't be made (e.g. no internet).
+export async function checkCode(config, code) {
+  try {
+    await withTimeout(getDocFromServer(doc(database(config), "restaurants", config.restaurantId, "codecheck", code)), 10000);
+    return true;
+  } catch (err) {
+    if (err && err.code === "permission-denied") return false;
+    throw err;
+  }
+}
+
 // Calls back with { paused } whenever staff pause or resume ordering; returns a function that stops watching
 export function watchOrdering(config, callback) {
   return onSnapshot(doc(database(config), "restaurants", config.restaurantId, "public", "status"),

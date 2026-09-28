@@ -91,6 +91,13 @@ service cloud.firestore {
         && request.resource.data.updatedBy == request.auth.token.email;
     }
 
+    // "Is this today's code?" Guests try to read /codecheck/{code}. Nothing is stored there: the read is
+    // allowed (and returns "not found") when the code is right, and refused when it's wrong, so the
+    // menu can check a code up front without anyone being able to read the code itself.
+    match /restaurants/{rid}/codecheck/{code} {
+      allow get: if codeOk(rid, code);
+    }
+
     // The pause switch: anyone can see it (so menus can show "ordering is paused"), only staff change it.
     match /restaurants/{rid}/public/status {
       allow get: if true;

@@ -121,7 +121,124 @@
       doc.classList.toggle("cart-paused", paused);
       live.textContent = paused ? "Ordering is paused. Please order with your server." : "Ordering is open again.";
       refresh();
+      paintGate();
     })).catch(err => console.warn("[cart] Couldn't load ordering status:", err));
+  }
+
+  /* ---------- Welcome screen: today's code as soon as the menu opens ---------- */
+
+  // Shown when the menu opens without a remembered code. The code is checked with Firebase straight away,
+  // so a wrong code is caught before the guest builds an order. "Just look at the menu" lets people browse;
+  // they're then asked for the code at checkout instead.
+  const GATE_SKIP_KEY = "gate-skipped:" + (C.restaurantId || location.pathname);
+  let gate = null, gateBusy = false, gateError = "";
+  function gateSkipped() {
+    try { return sessionStorage.getItem(GATE_SKIP_KEY) === "1"; } catch (_) { return false; }
+  }
+  const gateWanted = () => codeRequired() && !dailyCode && !gateSkipped();
+
+  function openGate() {
+    gate = document.createElement("div");
+    gate.className = "cart-gate";
+    gate.innerHTML = '<div class="cart-gate-card" role="dialog" aria-modal="true" aria-labelledby="cart-gate-title">'
+      + `<p class="cart-gate-hello">Welcome to</p><h2 id="cart-gate-title" tabindex="-1">${esc(C.restaurantName || "our menu")}</h2>`
+      + '<div class="cart-gate-body"></div></div>';
+    document.body.append(gate);
+    doc.classList.add("cart-lock");
+    paintGate();
+    (gate.querySelector("input") || gate.querySelector("h2")).focus();
+  }
+
+  function paintGate() {
+    if (!gate) return;
+    const body = gate.querySelector(".cart-gate-body");
+    const pill = table ? `<p class="cart-table-pill">Table ${esc(table)}</p>` : "";
+    if (paused) {
+      body.innerHTML = pill + '<p class="cart-gate-lead">Ordering is paused right now. Please order with your server.</p>'
+        + '<button type="button" class="cart-primary" data-cart-act="gate-skip">See the menu</button>';
+      return;
+    }
+    if (!body.querySelector("form")) {
+      body.innerHTML = pill + '<form class="cart-gate-form" novalidate>'
+        + (table ? "" : '<label for="gate-table">Your table number</label>'
+          + '<input id="gate-table" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10" placeholder="For example: 12">')
+        + '<label for="gate-code">Today’s code</label>'
+        + '<input id="gate-code" class="cart-gate-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="• • • •" aria-describedby="gate-hint gate-err">'
+        + '<p id="gate-hint" class="cart-gate-hint">Ask your server for today’s code, or check the card on your table.</p>'
+        + '<p id="gate-err" class="cart-ask-err" role="alert"></p>'
+        + '<button type="submit" class="cart-primary">Start ordering</button></form>'
+        + '<button type="button" class="cart-gate-skip" data-cart-act="gate-skip">Just look at the menu</button>';
+      body.querySelector("form").addEventListener("submit", gateSubmit);
+    }
+    body.querySelector("#gate-err").textContent = gateError;
+    body.querySelector("#gate-code").setAttribute("aria-invalid", gateError ? "true" : "false");
+    const btn = body.querySelector('button[type="submit"]');
+    btn.disabled = gateBusy;
+    btn.textContent = gateBusy ? "Checking…" : "Start ordering";
+  }
+
+  async function gateSubmit(e) {
+    e.preventDefault();
+    if (gateBusy) return;
+    const tableIn = gate.querySelector("#gate-table"), codeIn = gate.querySelector("#gate-code");
+    const t = table || cleanTable(tableIn ? tableIn.value : "");
+    const code = codeIn.value.replace(/\D/g, "");
+    if (!t) {
+      gateError = tableIn.value.trim() ? "That doesn’t look like a table number. Use the one on the QR code, like 12 or T12." : "Please enter your table number. It’s on the QR code on your table.";
+      paintGate();
+      tableIn.focus();
+      return;
+    }
+    if (!/^\d{4}$/.test(code)) {
+      gateError = codeIn.value.trim() ? "Today’s code is 4 digits." : "Please enter today’s code. Your server can tell you.";
+      paintGate();
+      codeIn.focus();
+      return;
+    }
+    gateBusy = true;
+    gateError = "";
+    paintGate();
+    let ok;
+    try {
+      ok = await (await firebase()).checkCode(C, code);
+    } catch (err) {
+      console.warn("[cart] Couldn't check the code:", err);
+      gateBusy = false;
+      gateError = "Couldn’t check the code. Check your internet connection and try again.";
+      paintGate();
+      return;
+    }
+    gateBusy = false;
+    if (!gate) return;
+    if (!ok) {
+      gateError = "That code isn’t right. Please ask your server for today’s code.";
+      codeIn.value = "";
+      paintGate();
+      const card = gate.querySelector(".cart-gate-card");
+      card.classList.remove("cart-shake");
+      void card.offsetWidth;   // restart the shake animation
+      card.classList.add("cart-shake");
+      codeIn.focus();
+      return;
+    }
+    if (!table) setTable(t);
+    rememberCode(code);
+    closeGate();
+    live.textContent = "You’re all set. Tap + Add on anything you’d like.";
+  }
+
+  function closeGate() {
+    if (!gate) return;
+    gate.remove();
+    gate = null;
+    doc.classList.remove("cart-lock");
+    refresh();
+  }
+
+  function skipGate() {
+    try { sessionStorage.setItem(GATE_SKIP_KEY, "1"); } catch (_) {}
+    closeGate();
+    live.textContent = paused ? "Ordering is paused. You can look at the menu." : "You can look at the menu. You’ll need today’s code to order.";
   }
 
   let fbModule = null;
@@ -677,15 +794,27 @@
       closeSheet();
     } else if (act === "place") {
       place();
+    } else if (act === "gate-skip") {
+      skipGate();
     }
   }
 
   function onKey(e) {
+    if (gate) {
+      // The welcome screen: Escape means "just look at the menu"; Tab stays inside it
+      if (e.key === "Escape") { e.preventDefault(); skipGate(); return; }
+      if (e.key !== "Tab") return;
+      const f = [...gate.querySelectorAll("button:not([disabled]), input")];
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      return;
+    }
     if (sheet.hidden) return;
     if (e.key === "Escape") { e.preventDefault(); closeSheet(); return; }
     if (e.key !== "Tab") return;
     // Keep Tab inside the open sheet
-    const f = [...panel.querySelectorAll('button:not([disabled]), textarea, [tabindex="-1"]')].filter(el => el.offsetParent !== null || el === titleEl);
+    const f = [...panel.querySelectorAll('button:not([disabled]), textarea, input, [tabindex="-1"]')].filter(el => el.offsetParent !== null || el === titleEl);
     if (!f.length) return;
     const first = f[0], last = f[f.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -707,6 +836,7 @@
     const root = document.querySelector(C.menuSelector || "body");
     if (root) new MutationObserver(decorate).observe(root, { childList: true, subtree: true });
     refresh();
+    if (gateWanted()) openGate();
   }
 
   window.MenuCart = { buildOrder, submitOrder };
