@@ -18,7 +18,7 @@
  * and with neither they're only logged.
  *
  * Today's code (Firebase only, MENU_CONFIG.dailyCode): staff get a 4-digit code on the staff screen each day;
- * guests enter it once at checkout and it's remembered until the daily reset. The Firestore rules reject orders
+ * a welcome screen asks guests for it as soon as the menu opens, and it's remembered until the daily reset. The Firestore rules reject orders
  * with a wrong or expired code, so a photo of a table's QR code can't be used to order from home.
  * Staff can also pause ordering; the menu then stays browsable but can't take orders.
  *
@@ -127,17 +127,15 @@
 
   /* ---------- Welcome screen: today's code as soon as the menu opens ---------- */
 
-  // Shown when the menu opens without a remembered code. The code is checked with Firebase straight away,
-  // so a wrong code is caught before the guest builds an order. "Just look at the menu" lets people browse;
-  // they're then asked for the code at checkout instead.
-  const GATE_SKIP_KEY = "gate-skipped:" + (C.restaurantId || location.pathname);
-  let gate = null, gateBusy = false, gateError = "";
-  function gateSkipped() {
-    try { return sessionStorage.getItem(GATE_SKIP_KEY) === "1"; } catch (_) { return false; }
-  }
-  const gateWanted = () => codeRequired() && !dailyCode && !gateSkipped();
+  // Shown every time the menu opens without a valid code, and again at Place order if the guest chose
+  // "Just look at the menu" first (their order is sent as soon as the code is accepted). It also asks for
+  // the table when the link has none. The code is checked with Firebase straight away.
+  let gate = null, gateBusy = false, gateError = "", placeAfterGate = false;
+  const gateWanted = () => codeRequired() && !dailyCode;
 
-  function openGate() {
+  function openGate(message) {
+    gateError = message || "";
+    if (gate) { paintGate(); return; }
     gate = document.createElement("div");
     gate.className = "cart-gate";
     gate.innerHTML = '<div class="cart-gate-card" role="dialog" aria-modal="true" aria-labelledby="cart-gate-title">'
@@ -161,20 +159,21 @@
     if (!body.querySelector("form")) {
       body.innerHTML = pill + '<form class="cart-gate-form" novalidate>'
         + (table ? "" : '<label for="gate-table">Your table number</label>'
-          + '<input id="gate-table" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10" placeholder="For example: 12">')
-        + '<label for="gate-code">Today’s code</label>'
-        + '<input id="gate-code" class="cart-gate-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="• • • •" aria-describedby="gate-hint gate-err">'
-        + '<p id="gate-hint" class="cart-gate-hint">Ask your server for today’s code, or check the card on your table.</p>'
+          + '<input id="gate-table" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10" placeholder="For example: 12">'
+          + '<p class="cart-gate-hint">It’s on the QR code on your table.</p>')
+        + (codeRequired() ? '<label for="gate-code">Today’s code</label>'
+          + '<input id="gate-code" class="cart-gate-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="• • • •" aria-describedby="gate-hint gate-err">'
+          + '<p id="gate-hint" class="cart-gate-hint">Ask your server for today’s code, or check the card on your table.</p>' : "")
         + '<p id="gate-err" class="cart-ask-err" role="alert"></p>'
-        + '<button type="submit" class="cart-primary">Start ordering</button></form>'
+        + '<button type="submit" class="cart-primary"></button></form>'
         + '<button type="button" class="cart-gate-skip" data-cart-act="gate-skip">Just look at the menu</button>';
       body.querySelector("form").addEventListener("submit", gateSubmit);
     }
     body.querySelector("#gate-err").textContent = gateError;
-    body.querySelector("#gate-code").setAttribute("aria-invalid", gateError ? "true" : "false");
+    body.querySelector("#gate-code")?.setAttribute("aria-invalid", gateError ? "true" : "false");
     const btn = body.querySelector('button[type="submit"]');
     btn.disabled = gateBusy;
-    btn.textContent = gateBusy ? "Checking…" : "Start ordering";
+    btn.textContent = gateBusy ? "Checking…" : placeAfterGate ? "Place my order" : "Start ordering";
   }
 
   async function gateSubmit(e) {
@@ -182,14 +181,14 @@
     if (gateBusy) return;
     const tableIn = gate.querySelector("#gate-table"), codeIn = gate.querySelector("#gate-code");
     const t = table || cleanTable(tableIn ? tableIn.value : "");
-    const code = codeIn.value.replace(/\D/g, "");
+    const code = codeIn ? codeIn.value.replace(/\D/g, "") : null;
     if (!t) {
       gateError = tableIn.value.trim() ? "That doesn’t look like a table number. Use the one on the QR code, like 12 or T12." : "Please enter your table number. It’s on the QR code on your table.";
       paintGate();
       tableIn.focus();
       return;
     }
-    if (!/^\d{4}$/.test(code)) {
+    if (codeIn && !/^\d{4}$/.test(code)) {
       gateError = codeIn.value.trim() ? "Today’s code is 4 digits." : "Please enter today’s code. Your server can tell you.";
       paintGate();
       codeIn.focus();
@@ -198,9 +197,9 @@
     gateBusy = true;
     gateError = "";
     paintGate();
-    let ok;
+    let ok = true;
     try {
-      ok = await (await firebase()).checkCode(C, code);
+      if (codeIn) ok = await (await firebase()).checkCode(C, code);
     } catch (err) {
       console.warn("[cart] Couldn't check the code:", err);
       gateBusy = false;
@@ -222,21 +221,24 @@
       return;
     }
     if (!table) setTable(t);
-    rememberCode(code);
+    if (codeIn) rememberCode(code);
+    const resume = placeAfterGate;
+    placeAfterGate = false;
     closeGate();
-    live.textContent = "You’re all set. Tap + Add on anything you’d like.";
+    if (resume) place();
+    else live.textContent = "You’re all set. Tap + Add on anything you’d like.";
   }
 
   function closeGate() {
     if (!gate) return;
     gate.remove();
     gate = null;
-    doc.classList.remove("cart-lock");
+    if (sheet.hidden) doc.classList.remove("cart-lock");   // the order sheet may still be open underneath
     refresh();
   }
 
   function skipGate() {
-    try { sessionStorage.setItem(GATE_SKIP_KEY, "1"); } catch (_) {}
+    placeAfterGate = false;
     closeGate();
     live.textContent = paused ? "Ordering is paused. You can look at the menu." : "You can look at the menu. You’ll need today’s code to order.";
   }
@@ -477,8 +479,7 @@
   let view = "review";   // "review" | "choose" | "sent" | "status"
   let sentId = null;
   let chooseItem = null, sending = false, error = "", opener = null;
-  let asking = false, tableError = "", codeError = "";
-  let whereEl, askEl, askTableEl, askInput, askErrEl, askCodeEl, codeInput, codeErrEl, pausedEl;
+  let whereEl, pausedEl;
 
   function build() {
     live = document.createElement("div");
@@ -591,26 +592,9 @@
         + '<div class="cart-notes"><label for="cart-notes">Notes for the kitchen <span>(optional)</span></label>'
         + '<textarea id="cart-notes" rows="2" maxlength="300" placeholder="For example: less spicy, no onion"></textarea></div>'
         + '<div class="cart-sum"></div>'
-        + '<p class="cart-paused-note" hidden>Ordering is paused right now. Please order with your server.</p>'
-        + '<div class="cart-ask" hidden>'
-        + '<div class="cart-ask-field" data-field="table"><label for="cart-table">Your table number</label>'
-        + '<input id="cart-table" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10" placeholder="For example: 12" aria-describedby="cart-table-hint cart-table-err">'
-        + '<p id="cart-table-hint" class="cart-ask-hint">You’ll find it on the QR code on your table.</p>'
-        + '<p id="cart-table-err" class="cart-ask-err" role="alert"></p></div>'
-        + '<div class="cart-ask-field" data-field="code"><label for="cart-code">Today’s code</label>'
-        + '<input id="cart-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="4 digits" aria-describedby="cart-code-hint cart-code-err">'
-        + '<p id="cart-code-hint" class="cart-ask-hint">Ask your server for today’s code, or check the card at your table. You only need it once per visit.</p>'
-        + '<p id="cart-code-err" class="cart-ask-err" role="alert"></p></div></div>';
+        + '<p class="cart-paused-note" hidden>Ordering is paused right now. Please order with your server.</p>';
       whereEl = bodyEl.querySelector(".cart-where");
       pausedEl = bodyEl.querySelector(".cart-paused-note");
-      askEl = bodyEl.querySelector(".cart-ask");
-      askTableEl = askEl.querySelector('[data-field="table"]');
-      askInput = askTableEl.querySelector("input");
-      askErrEl = askTableEl.querySelector(".cart-ask-err");
-      askCodeEl = askEl.querySelector('[data-field="code"]');
-      codeInput = askCodeEl.querySelector("input");
-      codeErrEl = askCodeEl.querySelector(".cart-ask-err");
-      [askInput, codeInput].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); place(); } }));
       linesEl = bodyEl.querySelector(".cart-lines");
       sumEl = bodyEl.querySelector(".cart-sum");
       notesEl = bodyEl.querySelector("textarea");
@@ -621,14 +605,6 @@
     const active = activeOrders();
     paint(whereEl, (table ? `<p class="cart-table-pill">Table ${esc(table)}</p>` : "")
       + (active.length ? `<button type="button" class="cart-track-link" data-cart-act="status">Earlier order #${esc(active[0].code)}: ${esc(STATUS[active[0].status].label)}. Track it</button>` : ""));
-    const needTable = !table, needCode = codeRequired() && !dailyCode;
-    askEl.hidden = !(asking && (needTable || needCode) && lines.length && !paused);
-    askTableEl.hidden = !needTable;
-    askCodeEl.hidden = !needCode;
-    askErrEl.textContent = tableError;
-    codeErrEl.textContent = codeError;
-    askInput.setAttribute("aria-invalid", tableError ? "true" : "false");
-    codeInput.setAttribute("aria-invalid", codeError ? "true" : "false");
     pausedEl.hidden = !paused || !lines.length;
     bodyEl.querySelector(".cart-notes").hidden = !lines.length;
     paint(linesEl, lines.length ? lines.map(lineHTML).join("") : '<p class="cart-empty">Your order is empty. Tap “+ Add” on anything you’d like.</p>');
@@ -665,37 +641,13 @@
     if (back) back.focus();
   }
 
-  function focusAsk() {
-    refresh();
-    askEl.scrollIntoView({ block: "nearest" });
-    const first = [[askTableEl, askInput], [askCodeEl, codeInput]].find(([el, input]) => !el.hidden && (!input.value.trim() || input.getAttribute("aria-invalid") === "true"))
-      || [[askTableEl, askInput], [askCodeEl, codeInput]].find(([el]) => !el.hidden);
-    if (first) first[1].focus();
-  }
-
   async function place() {
     if (sending || !lines.length || paused) return;
-    const needTable = !table, needCode = codeRequired() && !dailyCode;
-    if (needTable || needCode) {
-      // Missing the table (no table in the link) or today's code: ask here rather than blocking browsing
-      if (!asking) {
-        asking = true;
-        tableError = codeError = "";
-        focusAsk();
-        return;
-      }
-      const t = needTable ? cleanTable(askInput.value) : table;
-      const code = needCode ? codeInput.value.replace(/\D/g, "") : dailyCode;
-      tableError = needTable && !t
-        ? (askInput.value.trim() ? "That doesn’t look like a table number. Use the one on the QR code, like 12 or T12." : "Please enter your table number to place the order.")
-        : "";
-      codeError = needCode && !/^\d{4}$/.test(code)
-        ? (codeInput.value.trim() ? "Today’s code is 4 digits." : "Please enter today’s code. Your server can tell you.")
-        : "";
-      if (tableError || codeError) { focusAsk(); return; }
-      asking = false;
-      if (needTable) setTable(t);
-      if (needCode) rememberCode(code);
+    if (!table || (codeRequired() && !dailyCode)) {
+      // Missing the table or today's code: the welcome screen asks, then sends this order
+      placeAfterGate = true;
+      openGate();
+      return;
     }
     sending = true;
     error = "";
@@ -721,12 +673,11 @@
       if (err && err.code === "permission-denied" && codeRequired() && !paused) {
         // Firebase refused it: the code is wrong or has changed since this phone saved it
         rememberCode(null);
-        codeInput.value = "";
-        codeError = "That code didn’t work. It may have changed. Please check today’s code with your server.";
-        asking = true;
         error = "";
         sending = false;
-        focusAsk();
+        refresh();
+        placeAfterGate = true;
+        openGate("That code didn’t work. It may have changed. Please ask your server for today’s code.");
         return;
       }
       error = paused
