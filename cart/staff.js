@@ -345,3 +345,19 @@ const paintOnline = () => { $("#offline").hidden = navigator.onLine; };
 addEventListener("online", paintOnline);
 addEventListener("offline", paintOnline);
 paintOnline();
+
+/* ---------- Updates ---------- */
+
+// A tablet keeps this page open all day. Every 5 minutes, check whether a newer version has been published
+// (the ?v= on this script changes with each update) and offer a reload instead of running old code.
+const myVersion = new URL(import.meta.url).searchParams.get("v");
+async function checkForUpdate() {
+  try {
+    const html = await (await fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" })).text();
+    const live = (html.match(/staff\.js\?v=([\w-]+)/) || [])[1];
+    if (live && myVersion && live !== myVersion) $("#update").hidden = false;
+  } catch (_) { /* offline: try again next time */ }
+}
+setInterval(checkForUpdate, 5 * 60e3);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
+$("#update").addEventListener("click", () => location.reload());
